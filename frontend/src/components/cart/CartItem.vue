@@ -1,9 +1,17 @@
 <template>
 	<div
-		class="group flex items-start gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors duration-150 dark:hover:bg-accent/50"
+		class="group flex items-start gap-2 rounded-xl border-2 p-2 transition-all duration-200 scroll-mt-1 focus:outline-none"
+		:class="
+			isSelected
+				? 'border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.18),0_10px_30px_-18px_hsl(var(--primary)/0.9)] dark:bg-primary/10'
+				: 'border-transparent hover:bg-muted/50 dark:hover:bg-accent/50'
+		"
 		:data-cart-index="index"
 		tabindex="0"
+		@focusin="selectRow"
+		@click="selectRow"
 		@keydown.delete="handleDeleteKey"
+		@keydown="handleRowKeydown"
 	>
 		<div class="w-9 h-9 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
 			<img
@@ -28,7 +36,7 @@
 						:value="item.rate"
 						type="number"
 						min="0"
-						step="0.01"
+						:step="rateStep"
 						class="w-16 h-5 text-[11px] font-medium text-foreground bg-transparent border-b border-dashed border-border focus:outline-none focus:border-primary dark:border-muted-foreground/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 						@change="onRateChange"
 						@keydown.up.prevent="focusAdjacentItem(-1, 'rate')"
@@ -37,14 +45,21 @@
 					/>
 				</template>
 				<p v-else class="text-[11px] text-muted-foreground">
-					{{ currencySymbol }}{{ formatPrice(item.rate) }}
+					{{ currencySymbol }}{{ formatRate(item.rate) }}
 				</p>
 
 				<span class="text-[11px] text-muted-foreground">/</span>
 				<button
-					v-if="posStore.allowEditRate && hasMultipleUOMs"
+					v-if="hasMultipleUOMs"
+					ref="uomToggleRef"
 					@click="showUOMSelector = !showUOMSelector"
+					@keydown.left.prevent="cycleUOM(-1)"
+					@keydown.right.prevent="cycleUOM(1)"
+					@keydown.space.prevent="showUOMSelector = !showUOMSelector"
+					@keydown.enter.prevent="showUOMSelector = !showUOMSelector"
+					@keydown.escape="showUOMSelector = false"
 					class="text-[11px] text-primary hover:underline focus:outline-none"
+					:title="'Left/Right to cycle · Enter to open · U to toggle'"
 				>
 					{{ item.uom || item.stock_uom }}
 					<ChevronDown class="w-3 h-3 inline-block" />
@@ -54,12 +69,24 @@
 				</span>
 			</div>
 
-			<div v-if="showUOMSelector && itemUOMs.length > 0" class="mt-1 p-1.5 bg-muted rounded-md">
+			<div
+				v-if="showUOMSelector && itemUOMs.length > 0"
+				ref="uomContainerRef"
+				class="mt-1 p-1.5 bg-muted rounded-md"
+				@keydown="handleUOMContainerKeydown"
+			>
+				<div class="text-[9px] text-muted-foreground mb-1 ms-0.5">
+					← → cycle &bull; 1–{{ itemUOMs.length }} select &bull; Esc close
+				</div>
 				<div class="flex flex-wrap gap-1">
 					<button
-						v-for="u in itemUOMs"
+						v-for="(u, i) in itemUOMs"
 						:key="u.uom"
+						:data-uom="u.uom"
 						@click="selectUOM(u)"
+						@keydown.left.prevent="focusUOMButton($event, -1)"
+						@keydown.right.prevent="focusUOMButton($event, 1)"
+						@keydown.enter.prevent="selectUOM(u)"
 						class="px-2 py-0.5 rounded text-[10px] font-medium transition-all"
 						:class="
 							(item.uom || item.stock_uom) === u.uom
@@ -67,6 +94,7 @@
 								: 'bg-background border border-border hover:border-primary/40'
 						"
 					>
+						<span class="text-[9px] opacity-50 me-0.5">{{ i + 1 }}.</span>
 						{{ u.uom }}
 						<span v-if="u.conversion_factor !== 1" class="text-[9px] opacity-70">
 							(×{{ u.conversion_factor }})
@@ -178,8 +206,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { usePosStore } from "@/stores/posStore";
+import { useCartStore } from "@/stores/cartStore";
 import { useItemStore } from "@/stores/itemStore";
 import { Button } from "@/components/ui/button";
 import { Package, Minus, Plus, Trash2, Percent, ChevronDown } from "lucide-vue-next";
@@ -194,9 +223,12 @@ const props = defineProps({
 const emit = defineEmits(["update-qty", "update-rate", "update-discount", "update-uom", "remove"]);
 
 const posStore = usePosStore();
+const cartStore = useCartStore();
 const itemStore = useItemStore();
 
 const qtyInput = ref<HTMLInputElement | null>(null);
+const uomToggleRef = ref<HTMLButtonElement | null>(null);
+const uomContainerRef = ref<HTMLDivElement | null>(null);
 
 const showUOMSelector = ref(false);
 const showDiscountInput = ref(false);
@@ -205,6 +237,8 @@ const discountInput = ref(0);
 const itemUOMs = ref<ItemUOM[]>([]);
 
 const maxDiscount = computed(() => posStore.maxDiscountAllowed);
+
+const isSelected = computed(() => cartStore.selectedCartIndex === props.index);
 
 const hasMultipleUOMs = computed(() => itemUOMs.value.length > 1);
 
@@ -217,7 +251,7 @@ const formatDiscount = computed(() => {
 		return `${props.item.discount_percentage}%`;
 	}
 	if (props.item.discount_amount > 0) {
-		return `${props.currencySymbol}${props.item.discount_amount}`;
+		return `${props.currencySymbol}${formatPrice(props.item.discount_amount)}`;
 	}
 	return "";
 });
@@ -227,8 +261,6 @@ const discountAmount = computed(() => {
 	if (props.item.discount_percentage > 0) {
 		return (total * props.item.discount_percentage) / 100;
 	}
-	// For amount discount on return items (negative qty), negate the discount
-	// so calculations work correctly
 	const amt = props.item.discount_amount || 0;
 	return props.item.qty < 0 ? -amt : amt;
 });
@@ -239,9 +271,7 @@ const lineTotal = computed(() => {
 });
 
 onMounted(async () => {
-	if (posStore.allowEditRate) {
-		await loadItemUOMs();
-	}
+	await loadItemUOMs();
 	if (props.item.discount_percentage > 0) {
 		discountType.value = "percentage";
 		discountInput.value = props.item.discount_percentage;
@@ -254,9 +284,7 @@ onMounted(async () => {
 watch(
 	() => props.item.item_code,
 	async () => {
-		if (posStore.allowEditRate) {
-			await loadItemUOMs();
-		}
+		await loadItemUOMs();
 	},
 );
 
@@ -277,9 +305,54 @@ async function loadItemUOMs() {
 	}
 }
 
+// Focus the currently-selected UOM button when popup opens
+watch(showUOMSelector, (open) => {
+	if (open) {
+		nextTick(() => {
+			const current = props.item.uom || props.item.stock_uom;
+			const btn = uomContainerRef.value?.querySelector(
+				`[data-uom="${current}"]`,
+			) as HTMLButtonElement | null;
+			btn?.focus();
+		});
+	} else {
+		uomToggleRef.value?.focus();
+	}
+});
+
+function cycleUOM(direction: number) {
+	if (itemUOMs.value.length <= 1) return;
+	const current = props.item.uom || props.item.stock_uom;
+	const idx = itemUOMs.value.findIndex((u) => u.uom === current);
+	const next = (idx + direction + itemUOMs.value.length) % itemUOMs.value.length;
+	selectUOM(itemUOMs.value[next]);
+}
+
+function handleUOMContainerKeydown(event: KeyboardEvent) {
+	if (event.key === "Escape") {
+		showUOMSelector.value = false;
+		return;
+	}
+	const num = parseInt(event.key);
+	if (!isNaN(num) && num >= 1 && num <= itemUOMs.value.length) {
+		event.preventDefault();
+		selectUOM(itemUOMs.value[num - 1]);
+	}
+}
+
+function focusUOMButton(event: KeyboardEvent, direction: number) {
+	const container = uomContainerRef.value;
+	if (!container) return;
+	const buttons = Array.from(container.querySelectorAll("button[data-uom]")) as HTMLButtonElement[];
+	const idx = buttons.indexOf(event.target as HTMLButtonElement);
+	if (idx < 0) return;
+	const next = (idx + direction + buttons.length) % buttons.length;
+	buttons[next]?.focus();
+}
+
 function selectUOM(u: ItemUOM) {
 	const baseRate = props.item.rate / (props.item.conversion_factor || 1);
-	const newRate = Math.round(baseRate * u.conversion_factor * 100) / 100;
+	const newRate = roundRate(baseRate * u.conversion_factor);
 	emit("update-uom", props.index, u.uom, newRate, u.conversion_factor);
 	showUOMSelector.value = false;
 }
@@ -299,7 +372,7 @@ function onQtyChange(e: Event) {
 
 function onRateChange(e: Event) {
 	const val = parseFloat((e.target as HTMLInputElement).value) || 0;
-	emit("update-rate", props.index, Math.round(val * 100) / 100);
+	emit("update-rate", props.index, roundRate(val));
 }
 
 function applyDiscount() {
@@ -335,8 +408,36 @@ function focusAdjacentItem(direction: number, field: "qty" | "rate") {
 	}
 }
 
+const ratePrecision = computed(() => cartStore.itemRatePrecision);
+
+const rateStep = computed(() => {
+	const p = ratePrecision.value;
+	return p > 0 ? (1 / 10 ** p).toFixed(p) : "1";
+});
+
+function parseNumeric(value: number | string) {
+	const parsed = parseFloat(String(value ?? 0));
+	return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function roundRate(value: number) {
+	const p = ratePrecision.value;
+	return Math.round((value + Number.EPSILON) * 10 ** p) / 10 ** p;
+}
+
+function roundCurrency(value: number) {
+	return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function formatRate(rate: number | string) {
+	const p = ratePrecision.value;
+	return roundRate(parseNumeric(rate))
+		.toFixed(p)
+		.replace(/\.?0+$/, "");
+}
+
 function formatPrice(price: number | string) {
-	return (Math.round((parseFloat(String(price) || "0") + Number.EPSILON) * 100) / 100).toFixed(2);
+	return roundCurrency(parseNumeric(price)).toFixed(2);
 }
 
 function blockInvalidNumericKeys(event: KeyboardEvent) {
@@ -345,11 +446,61 @@ function blockInvalidNumericKeys(event: KeyboardEvent) {
 	}
 }
 
+function selectRow() {
+	cartStore.setSelectedCartIndex(props.index);
+}
+
 function handleDeleteKey(event: KeyboardEvent) {
-	const tag = (event.target as HTMLElement)?.tagName?.toLowerCase();
-	if (tag === "input" || tag === "textarea") return;
+	if (event.target !== event.currentTarget) return;
 	event.preventDefault();
 	event.stopPropagation();
+	selectRow();
 	emit("remove", props.index);
+}
+
+function handleRowKeydown(event: KeyboardEvent) {
+	const targetIsRow = event.target === event.currentTarget;
+	const tag = (event.target as HTMLElement)?.tagName?.toLowerCase();
+	const isInputLike = tag === "input" || tag === "textarea";
+
+	if (targetIsRow && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+		event.preventDefault();
+		focusAdjacentRow(event.key === "ArrowDown" ? 1 : -1);
+		return;
+	}
+
+	if (targetIsRow && event.key === "Enter") {
+		event.preventDefault();
+		qtyInput.value?.focus();
+		qtyInput.value?.select();
+		return;
+	}
+
+	if (isInputLike) return;
+
+	if ((event.key === "u" || event.key === "U") && hasMultipleUOMs.value) {
+		event.preventDefault();
+		showUOMSelector.value = !showUOMSelector.value;
+		return;
+	}
+	if (!showUOMSelector.value && hasMultipleUOMs.value) {
+		const num = parseInt(event.key);
+		if (!isNaN(num) && num >= 1 && num <= itemUOMs.value.length) {
+			event.preventDefault();
+			selectUOM(itemUOMs.value[num - 1]);
+		}
+	}
+}
+
+function focusAdjacentRow(direction: number) {
+	const targetIndex = props.index + direction;
+	const currentEl = document.querySelector(`[data-cart-index="${props.index}"]`) as HTMLElement | null;
+	const container = currentEl?.parentElement;
+	if (!container) return;
+	const targetEl = container.querySelector(`[data-cart-index="${targetIndex}"]`) as HTMLElement | null;
+	if (targetEl) {
+		targetEl.focus();
+		targetEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+	}
 }
 </script>

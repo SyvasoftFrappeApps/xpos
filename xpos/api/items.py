@@ -30,6 +30,19 @@ def get_pos_items(
 		lft, rgt = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"])
 		groups = frappe.get_all("Item Group", filters={"lft": [">=", lft], "rgt": ["<=", rgt]}, pluck="name")
 		filters["item_group"] = ["in", groups]
+	elif pos.item_groups:
+		allowed_names = [ig.item_group for ig in pos.item_groups]
+		all_groups: set[str] = set()
+		for group_name in allowed_names:
+			lft_rgt = frappe.db.get_value("Item Group", group_name, ["lft", "rgt"])
+			if lft_rgt:
+				lft, rgt = lft_rgt
+				descendants = frappe.get_all(
+					"Item Group", filters={"lft": [">=", lft], "rgt": ["<=", rgt]}, pluck="name"
+				)
+				all_groups.update(descendants)
+		if all_groups:
+			filters["item_group"] = ["in", list(all_groups)]
 
 	or_filters = []
 	if search_term:
@@ -151,6 +164,23 @@ def get_items_count(pos_profile: str, search_term: str = "", item_group: str = "
 			conditions += " AND i.item_group IN (SELECT name FROM `tabItem Group` WHERE lft >= %(lft)s AND rgt <= %(rgt)s)"
 			values["lft"] = ig.lft
 			values["rgt"] = ig.rgt
+	elif pos.item_groups:
+		# POS Profile restricts to specific item groups — apply as baseline filter
+		allowed_names = [ig.item_group for ig in pos.item_groups]
+		all_groups: set[str] = set()
+		for group_name in allowed_names:
+			lft_rgt = frappe.db.get_value("Item Group", group_name, ["lft", "rgt"])
+			if lft_rgt:
+				lft, rgt = lft_rgt
+				descendants = frappe.get_all(
+					"Item Group", filters={"lft": [">=", lft], "rgt": ["<=", rgt]}, pluck="name"
+				)
+				all_groups.update(descendants)
+		if all_groups:
+			placeholders = ", ".join([f"%(ig_{i})s" for i in range(len(all_groups))])
+			for i, g in enumerate(all_groups):
+				values[f"ig_{i}"] = g
+			conditions += f" AND i.item_group IN ({placeholders})"
 
 	if search_term:
 		search_term = search_term.strip()
@@ -173,8 +203,45 @@ def get_items_count(pos_profile: str, search_term: str = "", item_group: str = "
 
 
 @frappe.whitelist()
-def get_item_groups():
-	"""Get all item groups in a tree structure."""
+def get_item_groups(pos_profile: str | None = None):
+	"""Get item groups, filtered to POS Profile item_groups when configured."""
+	if pos_profile:
+		pos = frappe.get_cached_doc("POS Profile", pos_profile)
+		allowed_names = [ig.item_group for ig in (pos.item_groups or [])]
+		if allowed_names:
+			# Use the configured groups as the display tabs (parent_groups)
+			parent_groups = frappe.get_all(
+				"Item Group",
+				filters={"name": ["in", allowed_names]},
+				fields=["name", "parent_item_group", "image"],
+				order_by="lft asc",
+				limit_page_length=0,
+			)
+			# Collect all leaf groups that are descendants of the configured groups
+			all_leaf_names: set[str] = set()
+			for group_name in allowed_names:
+				lft_rgt = frappe.db.get_value("Item Group", group_name, ["lft", "rgt"])
+				if lft_rgt:
+					lft, rgt = lft_rgt
+					descendants = frappe.get_all(
+						"Item Group",
+						filters={"lft": [">=", lft], "rgt": ["<=", rgt], "is_group": 0},
+						pluck="name",
+					)
+					all_leaf_names.update(descendants)
+			groups = (
+				frappe.get_all(
+					"Item Group",
+					filters={"name": ["in", list(all_leaf_names)]},
+					fields=["name", "parent_item_group", "image"],
+					order_by="name asc",
+					limit_page_length=0,
+				)
+				if all_leaf_names
+				else []
+			)
+			return {"groups": groups, "parent_groups": parent_groups}
+
 	groups = frappe.get_all(
 		"Item Group",
 		filters={"is_group": 0},
@@ -313,36 +380,48 @@ def get_item_detail(
 		"price_list_rate",
 	)
 	result["rate"] = flt(rate)
+	result["price_list_rate"] = flt(rate)
+	result["uom"] = item.stock_uom
+	result["conversion_factor"] = 1.0
 
 	result["actual_qty"] = get_stock_qty(item_code, warehouse) if warehouse else 0
 
-	batch_no_data = []
+	batches = []
 	if item.has_batch_no and warehouse:
-		batch_no_data = _get_batch_data(item_code, warehouse, today)
-	result["batch_no_data"] = batch_no_data
+		for b in _get_batch_data(item_code, warehouse, today):
+			batches.append(
+				{
+					"batch_no": b["batch_no"],
+					"qty": flt(b.get("batch_qty", 0)),
+					"expiry_date": b.get("expiry_date"),
+				}
+			)
+	result["batches"] = batches
 
-	serial_no_data = []
+	serial_numbers = []
 	if item.has_serial_no and warehouse:
-		serial_no_data = frappe.get_all(
+		rows = frappe.get_all(
 			"Serial No",
 			filters={
 				"item_code": item_code,
 				"status": "Active",
 				"warehouse": warehouse,
 			},
-			fields=["name as serial_no", "batch_no"],
+			fields=["name"],
 		)
-	result["serial_no_data"] = serial_no_data
+		serial_numbers = [r.name for r in rows]
+	result["serial_numbers"] = serial_numbers
 
 	uoms = frappe.get_all(
 		"UOM Conversion Detail",
 		filters={"parent": item_code},
 		fields=["uom", "conversion_factor"],
+		order_by="idx asc",
 	)
 	stock_uom_exists = any(u.get("uom") == item.stock_uom for u in uoms)
 	if not stock_uom_exists:
-		uoms.append({"uom": item.stock_uom, "conversion_factor": 1.0})
-	result["item_uoms"] = uoms
+		uoms.insert(0, {"uom": item.stock_uom, "conversion_factor": 1.0})
+	result["uoms"] = uoms
 
 	barcodes = frappe.get_all(
 		"Item Barcode",
@@ -533,14 +612,37 @@ def update_price_list_rate(item_code: str, price_list: str, rate: float, uom: st
 
 
 @frappe.whitelist()
-def get_price_for_uom(item_code: str, price_list: str, uom: str):
-	"""Return Item Price for a specific UOM."""
+def get_price_for_uom(
+	item_code: str, uom: str, pos_profile: str | None = None, price_list: str | None = None
+):
+	"""Return Item Price for a specific UOM, falling back to base rate × conversion factor."""
+	if not price_list and pos_profile:
+		price_list = frappe.db.get_value("POS Profile", pos_profile, "selling_price_list")
+	if not price_list:
+		price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list")
+
 	rate = frappe.db.get_value(
 		"Item Price",
 		{"item_code": item_code, "price_list": price_list, "selling": 1, "uom": uom},
 		"price_list_rate",
 	)
-	return flt(rate) if rate else None
+	if rate:
+		return {"rate": flt(rate)}
+
+	base_rate = frappe.db.get_value(
+		"Item Price",
+		{"item_code": item_code, "price_list": price_list, "selling": 1},
+		"price_list_rate",
+	)
+	conversion_factor = (
+		frappe.db.get_value(
+			"UOM Conversion Detail",
+			{"parent": item_code, "uom": uom},
+			"conversion_factor",
+		)
+		or 1.0
+	)
+	return {"rate": flt(base_rate) * flt(conversion_factor)}
 
 
 def get_stock_qty(item_code: str, warehouse: str, pos_profile: str | None = None):
