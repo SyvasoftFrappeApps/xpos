@@ -8,6 +8,7 @@
 				:placeholder="field.label || field.fieldname"
 				:remote-search="true"
 				:show-search-icon="false"
+				:open-on-focus="true"
 				:clearable="true"
 				:max-visible="20"
 				:empty-text="__('No results')"
@@ -18,34 +19,26 @@
 
 			<Select
 				v-else-if="field.fieldtype === 'Select'"
+				class="w-[160px]"
 				:model-value="(modelFilters[field.fieldname] as string) || '__all__'"
 				@update:model-value="(val: string | undefined) => onFilterChange(field.fieldname, val || '')"
-			>
-				<SelectTriggerStyled class="h-8 w-[140px]">
-					<SelectValue :placeholder="field.label || field.fieldname" />
-				</SelectTriggerStyled>
-				<SelectContentStyled>
-					<SelectItemStyled value="__all__">{{ __("All") }} {{ field.label }}</SelectItemStyled>
-					<SelectItemStyled v-for="opt in getSelectOptions(field)" :key="opt" :value="opt">
-						{{ __(opt) }}
-					</SelectItemStyled>
-				</SelectContentStyled>
-			</Select>
+				:items="[
+					{ label: __('All'), value: '__all__' },
+					...getSelectOptions(field).map((opt) => ({ label: __(opt), value: opt })),
+				]"
+			/>
 
 			<Select
 				v-else-if="field.fieldtype === 'Check'"
+				class="w-[160px]"
 				:model-value="(modelFilters[field.fieldname] as string) || '__all__'"
 				@update:model-value="(val: string | undefined) => onFilterChange(field.fieldname, val || '')"
-			>
-				<SelectTriggerStyled class="h-8 w-[130px]">
-					<SelectValue :placeholder="field.label || field.fieldname" />
-				</SelectTriggerStyled>
-				<SelectContentStyled>
-					<SelectItemStyled value="__all__">{{ __("All") }} {{ field.label }}</SelectItemStyled>
-					<SelectItemStyled value="1">{{ __("Yes") }}</SelectItemStyled>
-					<SelectItemStyled value="0">{{ __("No") }}</SelectItemStyled>
-				</SelectContentStyled>
-			</Select>
+				:items="[
+					{ label: __('All'), value: '__all__' },
+					{ label: __('Yes'), value: '1' },
+					{ label: __('No'), value: '0' },
+				]"
+			/>
 			<Input
 				v-else
 				:model-value="(modelFilters[field.fieldname] as string) || ''"
@@ -67,17 +60,11 @@ import { reactive, computed } from "vue";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
 import { Input } from "@/components/ui/input";
-import {
-	Select,
-	SelectTriggerStyled,
-	SelectContentStyled,
-	SelectItemStyled,
-	SelectValue,
-} from "@/components/ui/select";
 import type { DocField } from "@/services/doctypeMeta";
 import { parseSelectOptions } from "@/services/doctypeMeta";
 import { searchLink } from "@/services/api";
 import __ from "@/lib/translate";
+import { Select } from "../ui/select";
 
 const ID_FIELD: DocField = {
 	fieldname: "name",

@@ -43,13 +43,16 @@ export const usePosStore = defineStore("pos", () => {
 	const currency = computed(() => posProfile.value?.currency);
 
 	const currencySymbol = computed(() => {
-		const _currency = (xpos as any).boot?.currencies?.find(
-			(c: any) => c.name === posProfile.value?.currency,
-		);
-		if (_currency) {
-			return _currency.symbol || _currency.name;
+		if (window.xpos) {
+			const _currency = (xpos as any).boot?.currencies?.find(
+				(c: any) => c.name === posProfile.value?.currency,
+			);
+			if (_currency) {
+				return _currency.symbol || _currency.name;
+			}
+			return currency.value || "$";
 		}
-		return currency.value || "$";
+		return "$";
 	});
 
 	const paymentMethods = computed(() => {
@@ -98,6 +101,8 @@ export const usePosStore = defineStore("pos", () => {
 		() => !!posProfile.value?.allow_user_to_edit_additional_discount,
 	);
 
+	const allowChangePostingDate = computed(() => !!posProfile.value?.allow_change_posting_date);
+
 	const displayItemsInStock = computed(() => !!posProfile.value?.display_items_in_stock);
 
 	const allowPartialPayment = computed(() => !!posProfile.value?.allow_partial_payment);
@@ -111,6 +116,8 @@ export const usePosStore = defineStore("pos", () => {
 	const allowSalesOrder = computed(() => !!posProfile.value?.allow_sales_order);
 
 	const allowDelete = computed(() => !!posProfile.value?.allow_delete);
+
+	const allowDeleteOfflineInvoice = computed(() => !!posProfile.value?.allow_delete_offline_invoice);
 
 	const allowPrintLastInvoice = computed(() => !!posProfile.value?.allow_print_last_invoice);
 
@@ -490,6 +497,7 @@ export const usePosStore = defineStore("pos", () => {
 		allowEditRate,
 		allowEditItemDiscount,
 		allowEditAdditionalDiscount,
+		allowChangePostingDate,
 		displayItemsInStock,
 		allowPartialPayment,
 		allowCreditSale,
@@ -497,6 +505,7 @@ export const usePosStore = defineStore("pos", () => {
 		allowReturnWithoutInvoice,
 		allowSalesOrder,
 		allowDelete,
+		allowDeleteOfflineInvoice,
 		allowPrintLastInvoice,
 		displayAdditionalNotes,
 		allowWriteOffChange,

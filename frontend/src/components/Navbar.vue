@@ -1,5 +1,8 @@
 <template>
 	<header class="h-14 bg-background border-b border-border flex items-center px-4 gap-3 shrink-0 z-30">
+		<Button variant="ghost" size="icon-sm" @click="toggleSidebar">
+			<Menu class="w-5 h-5" />
+		</Button>
 		<div class="flex items-center gap-2.5">
 			<img :src="isDark ? LogoDark : LogoLight" alt="X POS Logo" class="w-8 h-8" />
 			<span class="hidden md:inline">{{ __("X POS") }}</span>
@@ -82,7 +85,7 @@
 			</Button>
 		</TooltipWrapper>
 
-		<TooltipWrapper :content="__('Process Return')">
+		<TooltipWrapper v-if="posStore.allowReturn" :content="__('Process Return')">
 			<Button
 				variant="ghost"
 				size="sm"
@@ -258,6 +261,7 @@ import {
 	Search,
 	Info,
 	Keyboard,
+	Menu,
 } from "lucide-vue-next";
 import OfflinePendingPanel from "@/components/offline/OfflinePendingPanel.vue";
 import AboutDialog from "@/components/dialogs/AboutDialog.vue";
@@ -304,6 +308,10 @@ function handleOfflineAction() {
 	}
 }
 
+function toggleSidebar() {
+	window.dispatchEvent(new CustomEvent("xpos:toggle-sidebar"));
+}
+
 function openSearch() {
 	router.push("/pos");
 	nextTick(() => window.dispatchEvent(new CustomEvent("xpos:open-command-search")));
@@ -314,6 +322,7 @@ function handleShowRepeatDialog() {
 }
 
 function handleShowReturnDialog() {
+	if (!posStore.allowReturn) return;
 	showReturnDialog.value = true;
 }
 
@@ -324,7 +333,7 @@ function handleKeyboard(e: KeyboardEvent) {
 	}
 	if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "r") {
 		e.preventDefault();
-		showReturnDialog.value = true;
+		if (posStore.allowReturn) showReturnDialog.value = true;
 	}
 }
 

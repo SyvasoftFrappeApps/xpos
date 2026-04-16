@@ -10,6 +10,7 @@ export interface POSProfile {
 	selling_price_list?: string;
 	default_customer?: string;
 	allow_rate_change?: boolean;
+	allow_change_posting_date?: boolean;
 	allow_user_to_edit_additional_discount?: boolean;
 	allow_discount_change?: boolean;
 	display_items_in_stock?: boolean;
@@ -19,6 +20,7 @@ export interface POSProfile {
 	allow_return_without_invoice?: boolean;
 	allow_sales_order?: boolean;
 	allow_delete?: boolean;
+	allow_delete_offline_invoice?: boolean;
 	allow_print_last_invoice?: boolean;
 	display_additional_notes?: boolean;
 	allow_write_off_change?: boolean;
@@ -342,6 +344,7 @@ export interface InvoiceData {
 	pos_profile: string;
 	customer: string;
 	items: InvoiceItem[];
+	posting_date?: string;
 	additional_discount_percentage?: number;
 	discount_amount?: number;
 	payments?: InvoicePayment[];
@@ -363,6 +366,7 @@ export interface InvoiceData {
 	change_amount?: number;
 	currency?: string;
 	conversion_rate?: number;
+	is_credit_sale?: boolean;
 	pos_delivery_charges?: string;
 	pos_delivery_charges_rate?: number;
 }
@@ -747,6 +751,8 @@ export interface PurchaseInvoice {
 	supplier_name?: string;
 	company: string;
 	posting_date: string;
+	bill_no?: string;
+	remarks?: string;
 	grand_total: number;
 	outstanding_amount: number;
 	status: string;
