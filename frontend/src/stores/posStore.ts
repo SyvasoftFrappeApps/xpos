@@ -504,7 +504,6 @@ export const usePosStore = defineStore("pos", () => {
 		allowReturn,
 		allowReturnWithoutInvoice,
 		allowSalesOrder,
-		allowDelete,
 		allowDeleteOfflineInvoice,
 		allowPrintLastInvoice,
 		displayAdditionalNotes,
