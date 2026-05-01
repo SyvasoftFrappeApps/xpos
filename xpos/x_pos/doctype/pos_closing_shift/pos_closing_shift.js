@@ -51,7 +51,7 @@ frappe.ui.form.on("POS Closing Shift", {
 
 	get_pos_invoices(frm) {
 		frappe.call({
-			method: "xpos.x_pos.doctype.pos_closing_shift.closing_processing.invoices.get_pos_invoices",
+			method: "xpos.x_pos.doctype.pos_closing_shift.closing_processing.data.get_pos_invoices",
 			args: {
 				pos_opening_shift: frm.doc.pos_opening_shift,
 			},
