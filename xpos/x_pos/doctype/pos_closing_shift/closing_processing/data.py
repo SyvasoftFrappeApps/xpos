@@ -1,5 +1,3 @@
-from warnings import filters
-
 import frappe
 
 from xpos.x_pos.doctype.pos_closing_shift.closing_processing.invoices import (
@@ -39,6 +37,7 @@ def get_pos_invoices(pos_opening_shift: str, doctype: str | None = None):
 		)
 		doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
 
+	filters = {}
 	submit_printed_invoices(pos_opening_shift, doctype)
 
 	if doctype == "POS Invoice":
