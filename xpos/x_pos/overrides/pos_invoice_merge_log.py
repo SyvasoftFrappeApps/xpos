@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import erpnext.controllers.sales_and_purchase_return as _ret_module
 from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
 	POSInvoiceMergeLog as ERPNextPOSInvoiceMergeLog,
 )
@@ -50,6 +51,25 @@ class CustomPOSInvoiceMergeLog(ERPNextPOSInvoiceMergeLog):
 		self.consolidated_invoice = sales_invoice.name
 
 		return sales_invoice
+
+	def process_merging_into_credit_notes(self, data):
+		# The credit note's return_against is the consolidated sales invoice, but
+		# item rates come from POS return invoices whose net_rate may differ from
+		# the consolidated invoice rates, triggering a false rate validation error.
+		# POS return invoices are already validated at submission time, so the
+		# rate check in validate_returned_items is redundant here.
+		_original = _ret_module.validate_returned_items
+
+		def _skip_for_consolidated(doc):
+			if doc.get("is_consolidated"):
+				return
+			return _original(doc)
+
+		_ret_module.validate_returned_items = _skip_for_consolidated
+		try:
+			return super().process_merging_into_credit_notes(data)
+		finally:
+			_ret_module.validate_returned_items = _original
 
 	def merge_pos_invoice_into(self, invoice, data):
 		invoice = super().merge_pos_invoice_into(invoice, data)
