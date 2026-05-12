@@ -163,7 +163,7 @@ def _get_git_commit_info(app_name: str = "xpos") -> dict[str, Any]:
 
 	def _run(cmd: list[str]) -> str:
 		with (
-			open(
+			open(  # nosemgrep: frappe-security-file-traversal — static git command list, no user input
 				os.devnull, "rb"
 			) as null_stream  # nosemgrep: frappe-security-file-traversal — static git command list, no user input
 		):
