@@ -325,6 +325,7 @@ export const useCartStore = defineStore("cart", () => {
 				item_name: item.item_name,
 				local_item_name: item.local_item_name,
 				rate: normalizeItemRate(item.rate || 0),
+				price_list_rate: normalizeItemRate(item.rate || 0),
 				qty: isReturnMode.value ? -1 : 1,
 				uom: item.uom || item.stock_uom,
 				stock_uom: item.stock_uom,

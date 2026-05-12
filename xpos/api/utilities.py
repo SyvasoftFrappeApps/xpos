@@ -15,7 +15,6 @@ import platform
 import subprocess
 
 import frappe
-from frappe import _
 from frappe.utils import cint
 
 
@@ -55,7 +54,7 @@ def get_version_info():
 
 		app_path = os.path.join(frappe.get_app_path("xpos"), "..")
 		git_branch = (
-			subprocess.check_output(
+			subprocess.check_output(  # nosemgrep: frappe-subprocess-exec — static argument list, no user input
 				["git", "rev-parse", "--abbrev-ref", "HEAD"],
 				cwd=app_path,
 				stderr=subprocess.DEVNULL,
@@ -64,7 +63,7 @@ def get_version_info():
 			.strip()
 		)
 		git_hash = (
-			subprocess.check_output(
+			subprocess.check_output(  # nosemgrep: frappe-subprocess-exec — static argument list, no user input
 				["git", "rev-parse", "--short", "HEAD"],
 				cwd=app_path,
 				stderr=subprocess.DEVNULL,
@@ -73,7 +72,7 @@ def get_version_info():
 			.strip()
 		)
 		git_date = (
-			subprocess.check_output(
+			subprocess.check_output(  # nosemgrep: frappe-subprocess-exec — static argument list, no user input
 				["git", "log", "-1", "--format=%ci"],
 				cwd=app_path,
 				stderr=subprocess.DEVNULL,

@@ -16,9 +16,7 @@ class CustomPOSInvoice(ERPNextPOSInvoice):
 		"""
 
 		if getattr(self, "pos_opening_shift", None):
-			# Use existing shift validation from POS Awesome
 			validate_shift(self)
 			return
 
-		# No POS Awesome shift - use ERPNext's validation
 		super().validate_pos_opening_entry()
