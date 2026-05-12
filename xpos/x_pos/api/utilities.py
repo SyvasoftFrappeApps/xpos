@@ -164,7 +164,7 @@ def _get_git_commit_info(app_name: str = "xpos") -> dict[str, Any]:
 	def _run(cmd: list[str]) -> str:
 		with open(os.devnull, "rb") as null_stream:
 			return (
-				subprocess.check_output(  # nosemgrep: frappe-subprocess-exec — static git command list, no user input
+				subprocess.check_output(  # nosemgrep: frappe-security-file-traversal — static git command list, no user input
 					cmd,
 					cwd=app_path,
 					shell=False,
