@@ -211,9 +211,3 @@ docs: update installation instructions
 MIT — see [license.txt](license.txt) for full terms.
 
 ---
-
-<div align="center">
-
-Developed and maintained by **Ali Raza** — [ar.frappe.dev@gmail.com](mailto:ar.frappe.dev@gmail.com)
-
-</div>
