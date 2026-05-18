@@ -2,11 +2,11 @@
 	"name": "xpos-frontend",
 	"version": "0.0.1",
 	"description": "X POS - Point of Sale Desktop Application for ERPNext",
-	"author": "Ali Raza <ar.frappe.dev@gmail.com>",
+	"author": "hello@kodlyft.com",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/aliraxa29/xpos.git",
+		"url": "https://github.com/kodlyft/xpos.git",
 		"directory": "frontend"
 	},
 	"type": "module",
