@@ -6,7 +6,7 @@ import json
 import frappe
 from frappe import Any, _
 from frappe.utils import cint, flt, now_datetime, nowdate
-from xpos.api.utilities import get_invoice_type, is_pos_cashier
+from xpos.api.utilities import can_close_shift, get_invoice_type, is_pos_cashier
 
 
 def _row_value(row: dict | object, key: str, default: Any | None = None):
@@ -142,6 +142,9 @@ def close_shift(opening_shift: str, closing_details: str | list[dict] | None):
 	- Tax summary per shift
 	- Payment reconciliation with expected vs actual amounts
 	"""
+	if not can_close_shift():
+		frappe.throw(_("Only a Supervisor can close a shift."), frappe.PermissionError)
+
 	closing_details = json.loads(closing_details) if isinstance(closing_details, str) else closing_details
 
 	opening = frappe.get_doc("POS Opening Shift", opening_shift)
@@ -424,10 +427,14 @@ def _enrich_shift_data(data: dict, pos_profile: str):
 		data["taxes"] = []
 		data["tax_inclusive"] = 0
 
+	from xpos.api.auth import user_has_pos_permission
+
 	data["print_settings"] = {
 		"print_format": profile.get("print_format") or "POS Invoice",
 		"print_format_for_online": profile.get("print_format_for_online"),
-		"allow_print_before_pay": cint(profile.get("allow_print_draft_invoices")) or 0,
+		"allow_print_before_pay": 1
+		if user_has_pos_permission("print_draft_invoice", pos_profile=pos_profile)
+		else 0,
 		"auto_print_receipt": cint(profile.get("auto_print_receipt")) or 0,
 		"letter_head": profile.get("letter_head") or "",
 	}
@@ -515,6 +522,9 @@ def create_closing_shift(data: str | dict, local_id: str | None = None) -> dict:
 	Returns:
 	    dict with 'name' key containing the server docname
 	"""
+	if not can_close_shift():
+		frappe.throw(_("Only a Supervisor can close a shift."), frappe.PermissionError)
+
 	data = json.loads(data) if isinstance(data, str) else data
 
 	if local_id:

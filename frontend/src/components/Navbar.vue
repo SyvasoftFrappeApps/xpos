@@ -95,7 +95,7 @@
 			</Button>
 		</TooltipWrapper>
 
-		<TooltipWrapper v-if="posStore.allowReturn" :content="__('Process Return')">
+		<TooltipWrapper v-if="posStore.allowReturn && hasPermission('sale_return')" :content="__('Process Return')">
 			<Button
 				variant="ghost"
 				size="sm"
@@ -108,7 +108,7 @@
 		</TooltipWrapper>
 
 		<TooltipWrapper
-			v-if="posStore.allowPrintLastInvoice && posStore.lastInvoiceName"
+			v-if="posStore.lastInvoiceName && hasPermission('allow_reprint_invoice')"
 			:content="__('Print Last Invoice')"
 		>
 			<Button
@@ -241,6 +241,7 @@ import { usePosStore } from "@/stores/posStore";
 import { usePaymentStore } from "@/stores/paymentStore";
 import { useAuthStore } from "@/stores/authStore";
 import { __ } from "@/lib/translate";
+import { hasPermission } from "@/services/userRights";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { TooltipWrapper } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -333,7 +334,7 @@ function handleShowRepeatDialog() {
 }
 
 function handleShowReturnDialog() {
-	if (!posStore.allowReturn) return;
+	if (!posStore.allowReturn || !hasPermission("sale_return")) return;
 	showReturnDialog.value = true;
 }
 
@@ -344,7 +345,7 @@ function handleKeyboard(e: KeyboardEvent) {
 	}
 	if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "r") {
 		e.preventDefault();
-		if (posStore.allowReturn) showReturnDialog.value = true;
+		if (posStore.allowReturn && hasPermission("sale_return")) showReturnDialog.value = true;
 	}
 }
 
