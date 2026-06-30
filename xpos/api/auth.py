@@ -1,11 +1,7 @@
 # Copyright (c) 2026, Ali Raza and contributors
 # For license information, please see license.txt
 
-
-import json
-
 import frappe
-from frappe import _
 from frappe.utils import cint
 
 PERMISSION_FIELDS = [
