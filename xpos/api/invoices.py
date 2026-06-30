@@ -9,7 +9,7 @@ from frappe import _
 from frappe.utils import cint, flt, getdate, now_datetime, nowdate
 from frappe.utils.background_jobs import enqueue
 
-from xpos.api.utilities import get_invoice_type, get_profile_setting, is_pos_cashier
+from xpos.api.utilities import get_invoice_type, is_pos_cashier
 
 
 def _get_item_rate_precision():
@@ -205,7 +205,7 @@ def create_invoice(data: str | dict):
 		frappe.throw(_("At least one item is required"))
 
 	pos = frappe.get_cached_doc("POS Profile", pos_profile)
-	
+
 	doctype = get_invoice_type()
 
 	debit_to = None
@@ -587,7 +587,7 @@ def save_draft_invoice(data: str | dict):
 		frappe.throw(_("POS Profile, Customer, and Items are required"))
 
 	pos = frappe.get_cached_doc("POS Profile", pos_profile)
-	
+
 	doctype = get_invoice_type()
 
 	debit_to = None
@@ -1103,11 +1103,11 @@ def get_invoice_details(invoice_name: str, doctype: str = ""):
 
 
 @frappe.whitelist()
-def delete_draft_invoice(invoice_name: str, doctype: str = ""):
+def delete_draft_invoice(name: str, doctype: str = ""):
 	"""Delete a draft invoice."""
 	if not doctype:
-		doctype = _detect_invoice_doctype(invoice_name)
-	doc = frappe.get_doc(doctype, invoice_name)
+		doctype = _detect_invoice_doctype(name)
+	doc = frappe.get_doc(doctype, name)
 	if doc.docstatus != 0:
 		frappe.throw(_("Only draft invoices can be deleted"))
 	doc.delete(ignore_permissions=True)
