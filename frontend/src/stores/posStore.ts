@@ -410,11 +410,29 @@ export const usePosStore = defineStore("pos", () => {
 		}
 	}
 
+	// Electron's posOpeningShift.name is the local queue row id, not the real
+	// server document — the invoice-push pipeline needs it in that form to
+	// resolve later via sync_id_map. Online shift APIs need the actual server
+	// name instead, which only exists once the opening shift itself has synced.
+	function resolveServerShiftName(): string | null {
+		if (!posOpeningShift.value) return null;
+		if (isElectron()) return posOpeningShift.value.erp_id || null;
+		return posOpeningShift.value.name || null;
+	}
+
 	async function fetchClosingData(): Promise<ShiftSummary | undefined> {
-		if (!posOpeningShift.value?.name) return;
+		const openingShift = resolveServerShiftName();
+		if (!openingShift) {
+			if (isElectron() && posOpeningShift.value) {
+				throw new Error(
+					"This shift hasn't finished syncing to the server yet. Please wait a moment and try again.",
+				);
+			}
+			return;
+		}
 		try {
 			const data = await call<ShiftSummary>("xpos.api.shifts.get_shift_summary", {
-				opening_shift: posOpeningShift.value.name,
+				opening_shift: openingShift,
 			});
 			closingData.value = data;
 			return data;
@@ -425,10 +443,18 @@ export const usePosStore = defineStore("pos", () => {
 	}
 
 	async function closeShift(closingDetails: Record<string, unknown>[]): Promise<unknown> {
-		if (!posOpeningShift.value?.name) return;
+		const openingShift = resolveServerShiftName();
+		if (!openingShift) {
+			if (isElectron() && posOpeningShift.value) {
+				throw new Error(
+					"This shift hasn't finished syncing to the server yet. Please wait a moment and try again.",
+				);
+			}
+			return;
+		}
 		try {
 			const result = await call("xpos.api.shifts.close_shift", {
-				opening_shift: posOpeningShift.value.name,
+				opening_shift: openingShift,
 				closing_details: JSON.stringify(closingDetails),
 			});
 

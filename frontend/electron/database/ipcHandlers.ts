@@ -941,6 +941,7 @@ export function registerDbHandlers(): void {
 
 		const posOpeningShift = {
 			name: String(shift.id),
+			erp_id: (shift.erp_id as string) || null,
 			pos_profile: posProfileName,
 			company: companyName,
 			user: shift.user,

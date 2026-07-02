@@ -220,6 +220,7 @@ import { ref, onMounted } from "vue";
 import { usePosStore } from "@/stores/posStore";
 import { showSuccess, showError } from "@/services/api";
 import { hasPermission } from "@/services/userRights";
+import { get_full_url } from "@/utils";
 import {
 	Dialog,
 	DialogScrollContent,
@@ -307,7 +308,7 @@ onMounted(async () => {
 			}
 		}
 	} catch (error) {
-		showError("Failed to load shift data");
+		showError(error instanceof Error ? error.message : "Failed to load shift data");
 	} finally {
 		isLoading.value = false;
 	}
@@ -341,7 +342,9 @@ async function handleCloseShift() {
 function printShiftSummary() {
 	const name = closedShiftName.value;
 	if (!name) return;
-	const url = `/printview?doctype=POS+Closing+Entry&name=${name}&no_letterhead=0&trigger_print=1`;
+	const url = get_full_url(
+		`/printview?doctype=POS+Closing+Entry&name=${name}&no_letterhead=0&trigger_print=1`,
+	);
 	window.open(url, "_blank");
 }
 

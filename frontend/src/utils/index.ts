@@ -1,4 +1,5 @@
 import { call } from "@/services/api";
+import { isElectron, getApiBaseUrlSync } from "@/services/electronBridge";
 
 export {
 	addDays,
@@ -149,7 +150,12 @@ export async function getCustomer(customerId: string) {
 }
 
 export function get_base_url(): string {
-	var url = window.location.origin;
+	// In Electron, window.location.origin is the Vite dev server or a file://
+	// path — never the actual Frappe backend — so absolute URLs built from it
+	// (e.g. /printview links opened in a new window) must resolve against the
+	// configured server URL instead. In browser/PWA mode the app is served
+	// from the Frappe site itself, so its own origin is already correct.
+	var url = isElectron() ? getApiBaseUrlSync() : window.location.origin;
 	if (url.substring(url.length - 1, 1) == "/") url = url.substring(0, url.length - 1);
 	return url;
 }

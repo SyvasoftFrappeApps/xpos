@@ -109,6 +109,11 @@ export interface POSOpeningShift {
 	posting_date: string;
 	balance_details: POSOpeningShiftDetail[];
 	pos_closing_shift?: string;
+	// Electron only: `name` is the local queue row id (invoice pushes resolve
+	// it to the real server name later via sync_id_map), so online API calls
+	// that need the actual server document — get_shift_summary, close_shift —
+	// must use this instead. Null until the opening shift has synced.
+	erp_id?: string | null;
 }
 
 export interface POSOpeningShiftDetail {

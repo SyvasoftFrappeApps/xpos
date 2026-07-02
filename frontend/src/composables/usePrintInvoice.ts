@@ -1,6 +1,7 @@
 import { usePosStore } from "@/stores/posStore";
 import { call, showError } from "@/services/api";
 import { __ } from "@/lib/translate";
+import { get_base_url } from "@/utils";
 
 export interface PrintInvoiceOptions {
 	/** Override the print format (defaults to the POS profile's default thermal receipt). */
@@ -26,7 +27,7 @@ export function usePrintInvoice() {
 			const letterHead = posStore.printSettings?.letter_head || "";
 			const doctype = options.doctype || resolveDoctype();
 
-			const baseUrl = window.location.origin;
+			const baseUrl = get_base_url();
 			const printUrl = `${baseUrl}/printview?doctype=${encodeURIComponent(doctype)}&name=${encodeURIComponent(
 				invoiceName,
 			)}&format=${encodeURIComponent(printFormat)}&no_letterhead=${letterHead ? "0" : "1"}`;
