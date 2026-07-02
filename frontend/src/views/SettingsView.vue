@@ -211,7 +211,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
-import { isElectron } from "@/services/electronBridge";
+import {
+	isElectron,
+	clearApiCredentialsCache,
+	warmApiCredentials,
+	clearServerUrlCache,
+	getApiBaseUrl,
+} from "@/services/electronBridge";
 import { getSetting, setSetting, countItems, clearAllData } from "@/services/dbBridge";
 import { usePosStore } from "@/stores/posStore";
 import { toast } from "vue-sonner";
@@ -377,6 +383,13 @@ async function saveDbConfig() {
 			database: settings.dbName,
 		});
 		if (result.success) {
+			// The new database can have a different (or no) api_key/api_secret/
+			// server_url than whatever was cached in memory from the previous
+			// one — without this, every authenticated call keeps using stale
+			// credentials until the app is fully restarted.
+			clearApiCredentialsCache();
+			clearServerUrlCache();
+			await Promise.all([warmApiCredentials(), getApiBaseUrl()]);
 			toast.success("Database reconnected successfully");
 		} else {
 			toast.error(result.error || "Reconnection failed");

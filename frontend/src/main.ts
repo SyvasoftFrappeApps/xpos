@@ -32,13 +32,19 @@ if (!isElectron() && import.meta.env.PROD) {
 			},
 		});
 	});
-} else {
-	getApiBaseUrl().then((url) => {
+}
+
+// In Electron, both of these resolve via an IPC round-trip to the main
+// process. They're awaited before mount() below — components that fire API
+// calls from onMounted (e.g. the Orders list, settings fetch) were racing
+// this and silently sending requests with no server URL / no auth header.
+async function warmElectronConnection(): Promise<void> {
+	if (isElectron()) {
+		const url = await getApiBaseUrl();
 		console.log("[XPOS Electron] Server URL:", url);
-	});
-	warmApiCredentials().then(() => {
+		await warmApiCredentials();
 		console.log("[XPOS Electron] API credentials cache warmed");
-	});
+	}
 }
 
 async function initializeBrowserStorage(): Promise<void> {
@@ -60,6 +66,7 @@ async function bootstrap(): Promise<void> {
 	app.use(pinia);
 	app.use(router);
 	initializeNamespaces();
+	await warmElectronConnection();
 	await initializeBrowserStorage();
 	app.config.globalProperties.$dayjs = dayjs;
 	app.config.errorHandler = (err: unknown, _instance: unknown, info: string) => {
