@@ -1,5 +1,36 @@
 <template>
-	<div class="h-full min-h-0">
+	<div class="h-full min-h-0 flex flex-col">
+		<div v-if="isElectron() && localPending.length > 0" class="shrink-0 px-3 sm:px-4 pt-3 space-y-2">
+			<p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+				{{ __("Pending Sync") }} ({{ localPending.length }})
+			</p>
+			<Card
+				v-for="row in localPending"
+				:key="row.local_id"
+				class="p-3 sm:p-4 border-border/60 dark:border-transparent"
+			>
+				<div class="flex items-center gap-2 sm:gap-4">
+					<div class="min-w-0 flex-1">
+						<div class="flex items-center gap-2 mb-1 flex-wrap">
+							<User class="h-3 w-3 shrink-0" />
+							<span class="font-semibold text-foreground text-sm leading-tight">{{
+								row.customer_name || __("Unknown Customer")
+							}}</span>
+							<Badge :variant="localStatusVariant(row.status)" class="text-[10px]">
+								{{ __(localStatusLabel(row.status)) }}
+							</Badge>
+						</div>
+						<p class="text-xs text-muted-foreground truncate">{{ row.local_id }}</p>
+					</div>
+					<div class="text-end shrink-0">
+						<div class="font-bold text-foreground text-base sm:text-lg leading-tight">
+							{{ posStore.currencySymbol }}{{ formatNumber(row.grand_total || 0) }}
+						</div>
+					</div>
+				</div>
+			</Card>
+		</div>
+
 		<ListView
 			:title="__('Order History')"
 			:doctype="posStore.invoiceType"
@@ -45,6 +76,9 @@
 								}}</span>
 								<Badge :variant="statusVariant(order.status)" class="text-[10px]">
 									{{ __(order.status) }}
+								</Badge>
+								<Badge v-if="isElectron()" variant="success" class="text-[10px]">
+									{{ __("Synced") }}
 								</Badge>
 							</div>
 							<div
@@ -101,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { usePosStore } from "@/stores/posStore";
 import type { Invoice } from "@/types/pos.types";
 import { Card } from "@/components/ui/card";
@@ -111,10 +145,50 @@ import ListView from "@/components/core/ListView.vue";
 import __ from "@/lib/translate";
 import ReceiptPreviewDialog from "@/components/dialogs/ReceiptPreviewDialog.vue";
 import { call, showError } from "@/services/api";
+import { isElectron } from "@/services/electronBridge";
+import { getPendingInvoices } from "@/services/dbBridge";
+import type { PendingInvoice } from "@/services/idbService";
 
 const posStore = usePosStore();
 const selectedOrder = ref<Invoice | null>(null);
 const showDetails = ref(false);
+const localPending = ref<PendingInvoice[]>([]);
+let pendingRefreshId: ReturnType<typeof setInterval> | null = null;
+
+async function loadLocalPending() {
+	if (!isElectron()) return;
+	try {
+		const rows = (await getPendingInvoices()) as PendingInvoice[];
+		localPending.value = rows.filter((r) => r.status !== "synced");
+	} catch (error) {
+		console.warn("[XPOS] Failed to load local pending invoices for Orders page:", error);
+	}
+}
+
+function localStatusLabel(status: PendingInvoice["status"]): string {
+	if (status === "pending") return "Pending";
+	if (status === "syncing") return "Syncing";
+	if (status === "failed") return "Failed";
+	return status;
+}
+
+function localStatusVariant(
+	status: PendingInvoice["status"],
+): "default" | "success" | "warning" | "destructive" | "secondary" | "outline" {
+	if (status === "pending") return "warning";
+	if (status === "syncing") return "default";
+	if (status === "failed") return "destructive";
+	return "secondary";
+}
+
+onMounted(() => {
+	loadLocalPending();
+	pendingRefreshId = setInterval(loadLocalPending, 15_000);
+});
+
+onUnmounted(() => {
+	if (pendingRefreshId) clearInterval(pendingRefreshId);
+});
 
 async function viewOrder(order: Invoice) {
 	try {

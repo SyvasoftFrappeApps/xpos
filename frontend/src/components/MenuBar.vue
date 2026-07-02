@@ -559,6 +559,16 @@ const menus = computed<Menu[]>(() => [
 				shortcut: "Alt+8",
 				action: () => router.push("/barcode-print"),
 			},
+			...(isElectron()
+				? [
+						{
+							id: "goto-sync-status",
+							label: "Sync Status",
+							icon: RefreshCw,
+							action: () => router.push("/sync-status"),
+						},
+					]
+				: []),
 		],
 	},
 	{
