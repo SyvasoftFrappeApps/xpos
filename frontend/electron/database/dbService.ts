@@ -276,6 +276,31 @@ async function runMigrations(): Promise<void> {
 		await addUniqueIndexIfMissing(db, table, "server_name", "idx_server_name");
 	}
 
+	// pos_opening_shifts/pos_closing_entries used their small sequential `id`
+	// as the value sent to the server for xpos_local_id deduplication. That id
+	// resets to 1 after any local wipe/reinstall, while the server remembers
+	// old xpos_local_id mappings forever — so a fresh install's first shift
+	// could get "deduplicated" onto a years-old, already-closed shift instead
+	// of creating a new one. local_uid is a proper globally-unique value
+	// (timestamp + random, like pending_invoices.local_id) used for that
+	// purpose instead; existing already-synced rows are left as-is since
+	// they'll never be pushed again.
+	for (const table of ["pos_opening_shifts", "pos_closing_entries"]) {
+		try {
+			const [cols] = await db.execute<RowDataPacket[]>(
+				"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'local_uid'",
+				[table],
+			);
+			if ((cols as RowDataPacket[]).length === 0) {
+				await db.execute(`ALTER TABLE \`${table}\` ADD COLUMN \`local_uid\` VARCHAR(64) DEFAULT NULL`);
+				log.info(`Migration: added ${table}.local_uid`);
+			}
+		} catch (err) {
+			log.warn(`Migration for ${table}.local_uid failed`, err);
+		}
+		await addUniqueIndexIfMissing(db, table, "local_uid", "idx_local_uid");
+	}
+
 	try {
 		const [cols] = await db.execute<RowDataPacket[]>(
 			"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'items' AND COLUMN_NAME = 'local_item_name'",

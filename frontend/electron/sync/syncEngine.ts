@@ -296,7 +296,10 @@ async function pushTable(config: SyncTableConfig): Promise<{ synced: number; fai
 		pendingTable = "pos_opening_shifts";
 		statusField = "sync_status";
 		retryField = "COALESCE(retry_count, 0)";
-		localIdField = "id";
+		// Falls back to the raw id for rows created before local_uid existed;
+		// see the migration note in dbService.ts for why the raw id alone is
+		// unsafe to send as the dedup key for new rows.
+		localIdField = "local_uid";
 		statusPending = "'pending'";
 		statusFailed = "'failed'";
 		statusSyncing = "syncing";
@@ -305,7 +308,7 @@ async function pushTable(config: SyncTableConfig): Promise<{ synced: number; fai
 		pendingTable = "pos_closing_entries";
 		statusField = "sync_status";
 		retryField = "COALESCE(retry_count, 0)";
-		localIdField = "id";
+		localIdField = "local_uid";
 		statusPending = "'pending'";
 		statusFailed = "'failed'";
 		statusSyncing = "syncing";

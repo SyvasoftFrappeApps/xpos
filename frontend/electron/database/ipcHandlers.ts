@@ -862,15 +862,17 @@ export function registerDbHandlers(): void {
 			return { id: existingShift.id, existing: true };
 		}
 
+		const localUid = `shift_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 		const result = await execute(
 			`INSERT INTO \`pos_opening_shifts\`
-       (\`pos_profile\`, \`user\`, \`company\`, \`posting_date\`, \`period_start_date\`, \`status\`)
-       VALUES (?, ?, ?, ?, NOW(), 'Open')`,
+       (\`pos_profile\`, \`user\`, \`company\`, \`posting_date\`, \`period_start_date\`, \`status\`, \`local_uid\`)
+       VALUES (?, ?, ?, ?, NOW(), 'Open', ?)`,
 			[
 				shift.pos_profile,
 				shift.user,
 				shift.company,
 				shift.opening_date || new Date().toISOString().slice(0, 10),
+				localUid,
 			],
 		);
 		const shiftId = result.insertId;
@@ -1017,11 +1019,12 @@ export function registerDbHandlers(): void {
 			: entry.pos_opening_shift_local_id
 				? Number(entry.pos_opening_shift_local_id)
 				: null;
+		const localUid = `closing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 		const result = await execute(
 			`INSERT INTO \`pos_closing_entries\`
        (\`pos_profile\`, \`user\`, \`company\`, \`pos_opening_entry_id\`,
-        \`posting_date\`, \`period_end_date\`, \`sync_status\`)
-       VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+        \`posting_date\`, \`period_end_date\`, \`sync_status\`, \`local_uid\`)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
 			[
 				entry.pos_profile,
 				entry.user,
@@ -1029,6 +1032,7 @@ export function registerDbHandlers(): void {
 				openingEntryId,
 				entry.posting_date || entry.closing_date || new Date().toISOString().slice(0, 10),
 				entry.period_end_date || entry.posting_date || new Date().toISOString().slice(0, 10),
+				localUid,
 			],
 		);
 		const payments = entry.payment_details as
