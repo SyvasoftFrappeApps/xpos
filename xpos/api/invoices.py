@@ -182,7 +182,7 @@ def _ensure_pos_invoice_payment_row(invoice_doc, pos_profile_doc, require_paymen
 
 
 @frappe.whitelist()
-def create_invoice(data: str | dict):
+def create_invoice(data: str | dict, local_id: str | None = None):
 	"""Create a POS Sales Invoice from cart data."""
 	data = json.loads(data) if isinstance(data, str) else data
 
@@ -207,6 +207,14 @@ def create_invoice(data: str | dict):
 	pos = frappe.get_cached_doc("POS Profile", pos_profile)
 
 	doctype = get_invoice_type()
+
+	# A retried sync (app restart mid-push, offline-detection flake, etc.) must
+	# not create a second invoice for the same offline sale. If this local_id
+	# already produced an invoice, hand back that one instead of creating anew.
+	if local_id:
+		existing_name = frappe.db.get_value(doctype, {"xpos_local_id": local_id}, "name")
+		if existing_name:
+			return _build_invoice_response(frappe.get_doc(doctype, existing_name))
 
 	debit_to = None
 	if hasattr(pos, "debit_to") and pos.get("debit_to"):
@@ -239,6 +247,9 @@ def create_invoice(data: str | dict):
 			invoice_doc.set("offers", [])
 	else:
 		invoice_doc = frappe.new_doc(doctype)
+
+	if local_id:
+		invoice_doc.xpos_local_id = local_id
 
 	invoice_doc.is_pos = 1
 	invoice_doc.pos_profile = pos_profile
@@ -532,7 +543,21 @@ def create_invoice(data: str | dict):
 	if is_existing_draft:
 		invoice_doc.save(ignore_permissions=True)
 	else:
-		invoice_doc.insert(ignore_permissions=True)
+		try:
+			invoice_doc.insert(ignore_permissions=True)
+		except frappe.UniqueValidationError:
+			# Two terminals raced on the same local_id (identical millisecond
+			# timestamp collision in the desktop app's id generator) and both
+			# passed the pre-insert dedup check above. The unique constraint on
+			# xpos_local_id caught it at the database level; whichever insert
+			# lost the race should hand back the winner's invoice instead of
+			# erroring out, since from the offline app's perspective this sale
+			# already exists on the server.
+			frappe.db.rollback()
+			existing_name = frappe.db.get_value(doctype, {"xpos_local_id": local_id}, "name")
+			if existing_name:
+				return _build_invoice_response(frappe.get_doc(doctype, existing_name))
+			raise
 
 	_validate_unpaid_balance_permissions(invoice_doc, pos, data)
 
@@ -1019,6 +1044,33 @@ def get_invoices(
 		],
 		order_by="posting_date desc, posting_time desc, modified desc",
 		limit_page_length=cint(limit) if limit else 50,
+	)
+
+
+@frappe.whitelist()
+def get_invoice_sync_status(pos_profile: str, limit: int = 200):
+	"""Return every invoice (any docstatus) for a POS profile with its xpos_local_id,
+	so the desktop app can reconcile its local offline queue against what actually
+	exists on the server (e.g. detect duplicates, cancellations, or local records
+	that never made it across)."""
+	doctype = get_invoice_type()
+
+	return frappe.get_all(
+		doctype,
+		filters={"pos_profile": pos_profile},
+		fields=[
+			"name",
+			"customer",
+			"customer_name",
+			"posting_date",
+			"grand_total",
+			"status",
+			"docstatus",
+			"xpos_local_id",
+			"creation",
+		],
+		order_by="creation desc",
+		limit_page_length=cint(limit) if limit else 200,
 	)
 
 

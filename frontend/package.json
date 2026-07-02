@@ -10,7 +10,7 @@
 		"directory": "frontend"
 	},
 	"type": "module",
-	"main": "dist-electron/main.js",
+	"main": "dist-electron/main.cjs",
 	"scripts": {
 		"dev": "vite",
 		"dev:electron": "vite --config vite.config.electron.ts",

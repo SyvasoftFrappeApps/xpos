@@ -2,7 +2,6 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { call } from "@/services/api";
 import { cacheERPSettings, getCachedERPSettings } from "@/services/dbBridge";
-import { isOnline } from "@/utils";
 import { isElectron } from "@/services/electronBridge";
 import type {
 	ERPSettings,
@@ -12,6 +11,7 @@ import type {
 	AccountsSettings,
 	GlobalDefaults,
 	CurrencyPrecision,
+	POSSettings,
 } from "@/types/pos.types";
 
 const emptySellingSettings: SellingSettings = {
@@ -89,6 +89,7 @@ export const useSettingsStore = defineStore("settings", () => {
 	const accountsSettings = ref<AccountsSettings>({ ...emptyAccountsSettings });
 	const globalDefaults = ref<GlobalDefaults>({ ...emptyGlobalDefaults });
 	const currencyPrecision = ref<CurrencyPrecision>({ ...emptyCurrencyPrecision });
+	const posSettings = ref<Partial<POSSettings>>({});
 
 	const defaultSellingPriceList = computed(() => sellingSettings.value.default_selling_price_list);
 
@@ -135,6 +136,9 @@ export const useSettingsStore = defineStore("settings", () => {
 		accountsSettings.value = { ...emptyAccountsSettings, ...data.accounts_settings };
 		globalDefaults.value = { ...emptyGlobalDefaults, ...data.global_defaults };
 		currencyPrecision.value = { ...emptyCurrencyPrecision, ...data.currency_precision };
+		if (data.pos_settings) {
+			posSettings.value = { ...data.pos_settings };
+		}
 		isLoaded.value = true;
 	}
 
@@ -154,6 +158,7 @@ export const useSettingsStore = defineStore("settings", () => {
 					accounts_settings: boot.accounts_settings || {},
 					global_defaults: boot.sysdefaults || {},
 					currency_precision: boot.currency_precision || {},
+					pos_settings: boot.pos_settings || {},
 				} as ERPSettings;
 				_applySettings(data);
 				return;
@@ -161,18 +166,21 @@ export const useSettingsStore = defineStore("settings", () => {
 		}
 
 		try {
-			if (isOnline()) {
-				const data = await call<ERPSettings>("xpos.api.settings.get_erp_settings");
-				_applySettings(data);
+			// Not gated on isOnline(): navigator.onLine can briefly report false
+			// right after the window loads, before Chromium's network state has
+			// settled. Attempting the real request and falling back to cache on
+			// actual failure (below) avoids getting stuck with empty settings for
+			// the rest of the session over a one-off boot-time false negative.
+			const data = await call<ERPSettings>("xpos.api.settings.get_erp_settings");
+			_applySettings(data);
 
-				const { usePosStore } = await import("@/stores/posStore");
-				if (usePosStore().useOfflineMode) {
-					await cacheERPSettings(data).catch((err) =>
-						console.warn("[XPOS] Failed to cache ERP settings:", err),
-					);
-				}
-				return;
+			const { usePosStore } = await import("@/stores/posStore");
+			if (usePosStore().useOfflineMode) {
+				await cacheERPSettings(data).catch((err) =>
+					console.warn("[XPOS] Failed to cache ERP settings:", err),
+				);
 			}
+			return;
 		} catch (error) {
 			console.warn("[XPOS] Failed to fetch ERP settings from server:", error);
 		}
@@ -208,6 +216,7 @@ export const useSettingsStore = defineStore("settings", () => {
 		accountsSettings,
 		globalDefaults,
 		currencyPrecision,
+		posSettings,
 		defaultSellingPriceList,
 		defaultBuyingPriceList,
 		defaultCurrency,

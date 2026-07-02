@@ -4,6 +4,7 @@ const CashierView = () => import("@/views/CashierView.vue");
 const ReportsIndexView = () => import("@/views/ReportsIndexView.vue");
 const ReportViewerView = () => import("@/views/ReportViewerView.vue");
 const SettingsView = () => import("@/views/SettingsView.vue");
+const SyncStatusView = () => import("@/views/SyncStatusView.vue");
 const PurchaseOrderView = () => import("@/views/PurchaseOrderView.vue");
 const PurchaseOrderListView = () => import("@/views/PurchaseOrderListView.vue");
 const PurchaseInvoiceView = () => import("@/views/PurchaseInvoiceView.vue");
@@ -112,6 +113,12 @@ const routes: RouteRecordRaw[] = [
 		name: "settings",
 		component: SettingsView,
 		meta: { title: "Settings", requiresAuth: true },
+	},
+	{
+		path: "/sync-status",
+		name: "sync-status",
+		component: SyncStatusView,
+		meta: { title: "Invoice Sync Status", requiresAuth: true },
 	},
 	{
 		path: "/expenses",

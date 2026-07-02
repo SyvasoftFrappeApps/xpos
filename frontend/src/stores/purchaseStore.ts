@@ -603,7 +603,12 @@ export const usePurchaseStore = defineStore("purchase", () => {
 		isSyncing.value = true;
 
 		try {
-			const pending = await getAllPendingPurchases();
+			const allPending = await getAllPendingPurchases();
+			// getAllPendingPurchases returns every row regardless of status. The main
+			// process's own background sync (electron/sync/syncEngine.ts) also pushes
+			// this same table, so without this filter an already-synced purchase would
+			// get pushed again here and create a duplicate document on the server.
+			const pending = allPending.filter((p) => p.status !== "synced");
 			if (pending.length === 0) {
 				isSyncing.value = false;
 				return;

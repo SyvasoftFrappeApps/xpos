@@ -48,7 +48,11 @@ function isOnline(): boolean {
 	return net.isOnline();
 }
 
-async function apiCall<T = unknown>(method: string, args: Record<string, unknown> = {}): Promise<T> {
+async function apiCall<T = unknown>(
+	method: string,
+	args: Record<string, unknown> = {},
+	httpMethod: "GET" | "POST" = "GET",
+): Promise<T> {
 	if (!syncContext) throw new Error("Sync context not initialized");
 
 	const baseUrl = `${syncContext.serverUrl}/api/method/${method}`;
@@ -62,7 +66,7 @@ async function apiCall<T = unknown>(method: string, args: Record<string, unknown
 
 	return new Promise<T>((resolve, reject) => {
 		const request = net.request({
-			method: "GET",
+			method: httpMethod,
 			url,
 		});
 
@@ -89,12 +93,16 @@ async function apiCall<T = unknown>(method: string, args: Record<string, unknown
 				try {
 					const data = JSON.parse(responseBody);
 					if (response.statusCode && response.statusCode >= 400) {
-						reject(new Error(data.message || `HTTP ${response.statusCode}`));
+						reject(
+							new Error(
+								data.message || data.exception || `HTTP ${response.statusCode}: ${responseBody.slice(0, 500)}`,
+							),
+						);
 					} else {
 						resolve(data.message as T);
 					}
 				} catch {
-					reject(new Error(`Invalid JSON response from ${method}`));
+					reject(new Error(`Invalid JSON response from ${method}: ${responseBody.slice(0, 500)}`));
 				}
 			});
 		});
@@ -168,7 +176,8 @@ async function pullTable(config: SyncTableConfig): Promise<number> {
 						}
 						return r;
 					});
-		await upsertBatch(config.idbStore, processedBatch, primaryKey);
+		const preserveOnUpdate = config.idbStore === "pos_users" ? ["password_hash"] : [];
+		await upsertBatch(config.idbStore, processedBatch, primaryKey, preserveOnUpdate);
 
 		totalPulled += batch.length;
 		start += config.batchSize;
@@ -400,10 +409,17 @@ async function pushTable(config: SyncTableConfig): Promise<{ synced: number; fai
 				data = record as Record<string, unknown>;
 			}
 
-			const serverResult = await apiCall<{ name?: string }>(config.pushMethod, {
-				data: JSON.stringify(data),
-				local_id: recordLocalId,
-			});
+			const serverResult = await apiCall<{ name?: string }>(
+				config.pushMethod,
+				{
+					data: JSON.stringify(data),
+					local_id: recordLocalId,
+				},
+				"POST",
+			);
+			log.info(
+				`Push response for ${config.label} (local id ${recordLocalId}): ${JSON.stringify(serverResult)}`,
+			);
 
 			if (serverResult?.name) {
 				await execute(
@@ -435,6 +451,7 @@ async function pushTable(config: SyncTableConfig): Promise<{ synced: number; fai
 		} catch (error) {
 			failed++;
 			const errMsg = error instanceof Error ? error.message : String(error);
+			log.error(`Push failed for ${config.label} (local id ${recordLocalId}): ${errMsg}`);
 
 			if (pendingTable === "pending_invoices" || pendingTable === "pending_purchases") {
 				await execute(

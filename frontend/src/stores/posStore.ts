@@ -4,6 +4,7 @@ import { call } from "@/services/api";
 import { cachePOSData, getCachedPOSData } from "@/services/dbBridge";
 import { isElectron } from "@/services/electronBridge";
 import { loadPermissions } from "@/services/userRights";
+import { useSettingsStore } from "@/stores/settingsStore";
 import {
 	type POSOpeningShift,
 	type POSProfile,
@@ -74,7 +75,9 @@ export const usePosStore = defineStore("pos", () => {
 
 	const sellingPriceList = computed(() => posProfile.value?.selling_price_list || "");
 
-	const invoiceType = computed(() => xpos.boot?.pos_settings?.invoice_type);
+	const invoiceType = computed(
+		() => xpos.boot?.pos_settings?.invoice_type || useSettingsStore().posSettings.invoice_type,
+	);
 
 	const defaultPrintFormat = computed(
 		() => posProfile.value?.default_print_format || "XPOS Thermal Receipt",

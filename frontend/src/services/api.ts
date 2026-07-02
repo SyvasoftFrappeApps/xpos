@@ -3,7 +3,7 @@ import {
 	showError as toastError,
 	showInfo as toastInfo,
 } from "@/composables/useToast";
-import { isOnline, isNetworkError } from "@/utils";
+import { isNetworkError } from "@/utils";
 import { isElectron, getApiBaseUrlSync, getApiCredentialsSync } from "@/services/electronBridge";
 import { getMeta } from "./idbService";
 
@@ -18,10 +18,10 @@ function getCsrfToken(): string {
 }
 
 async function fetchCall<T = unknown>(method: string, args: Record<string, unknown> = {}): Promise<T> {
-	if (!isOnline()) {
-		throw new Error("__offline__");
-	}
-
+	// Deliberately not gating on isOnline()/navigator.onLine here: it can report
+	// false for a moment right after the window loads, before Chromium's network
+	// state has settled, which would wrongly skip requests during a period when
+	// the app is actually online. A real network failure is still caught below.
 	const csrfToken = getCsrfToken();
 
 	const headers: HeadersInit = {

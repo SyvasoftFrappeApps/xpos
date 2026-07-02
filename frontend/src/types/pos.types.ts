@@ -1036,6 +1036,7 @@ export interface ERPSettings {
 	accounts_settings: AccountsSettings;
 	global_defaults: GlobalDefaults;
 	currency_precision: CurrencyPrecision;
+	pos_settings?: Partial<POSSettings>;
 }
 
 export const DOCSTATUS_MAP: Record<number, string> = {

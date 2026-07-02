@@ -137,7 +137,12 @@ export const useOfflineStore = defineStore("offline", () => {
 		syncErrors.value = [];
 
 		try {
-			const invoices = (await getAllPendingInvoices()) as OfflineInvoice[];
+			const allInvoices = (await getAllPendingInvoices()) as OfflineInvoice[];
+			// getAllPendingInvoices returns every row regardless of status. The main
+			// process's own background sync (electron/sync/syncEngine.ts) also pushes
+			// this same table, so without this filter an already-synced invoice would
+			// get pushed again here and create a duplicate Sales Invoice on the server.
+			const invoices = allInvoices.filter((inv) => inv.status !== "synced");
 			if (invoices.length === 0) {
 				isSyncing.value = false;
 				return;
@@ -159,6 +164,7 @@ export const useOfflineStore = defineStore("offline", () => {
 
 					await call<{ name: string }>("xpos.api.invoices.create_invoice", {
 						data: JSON.stringify(invoice.data),
+						local_id: invoice.local_id,
 					});
 					if (invoice.id) await deletePendingInvoice(invoice.id);
 					synced++;
@@ -221,6 +227,7 @@ export const useOfflineStore = defineStore("offline", () => {
 
 			await call<{ name: string }>("xpos.api.invoices.create_invoice", {
 				data: JSON.stringify(invoice.data),
+				local_id: invoice.local_id,
 			});
 
 			await deletePendingInvoice(id);

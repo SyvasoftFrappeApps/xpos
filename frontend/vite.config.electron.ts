@@ -48,6 +48,17 @@ export default defineConfig({
 						outDir: "dist-electron",
 						rollupOptions: {
 							external: ["electron"],
+							// The plugin's default `lib.formats` is `["es", "cjs"]` for
+							// "type": "module" packages, and Vite concatenates array
+							// config rather than replacing it. Providing `output` as an
+							// array (one entry per format, in the same order) routes the
+							// "es" pass to a throwaway file and keeps the "cjs" pass at
+							// the real path, so Electron (CommonJS-only main process)
+							// always loads a valid CJS bundle.
+							output: [
+								{ format: "es", entryFileNames: "[name].unused.mjs" },
+								{ format: "cjs", entryFileNames: "[name].cjs" },
+							],
 						},
 					},
 				},
@@ -64,6 +75,10 @@ export default defineConfig({
 						outDir: "dist-electron",
 						rollupOptions: {
 							external: ["electron"],
+							output: [
+								{ format: "es", entryFileNames: "[name].unused.mjs" },
+								{ format: "cjs", entryFileNames: "[name].cjs" },
+							],
 						},
 					},
 				},

@@ -148,6 +148,7 @@ import {
 	Landmark,
 	BarChart3,
 	Banknote,
+	RefreshCw,
 } from "lucide-vue-next";
 
 import LogoDark from "@/assets/images/xpos-logo-dark.svg";
@@ -192,6 +193,7 @@ const purchaseNavItems = [
 
 const toolsNavItems = [
 	{ route: "/barcode-print", label: __("Barcode Printer"), icon: Printer, show: true },
+	{ route: "/sync-status", label: __("Sync Status"), icon: RefreshCw, show: isElectron() },
 	{ route: "/settings", label: __("Settings"), icon: Settings, show: isElectron() },
 ];
 

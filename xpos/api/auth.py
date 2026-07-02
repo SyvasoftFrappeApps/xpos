@@ -199,8 +199,8 @@ def get_current_user_permissions() -> dict:
 @frappe.whitelist()
 def get_pos_users(
 	doctype: str | None = None,
-	fields: list | None = None,
-	filters: dict | None = None,
+	fields: str | list | None = None,
+	filters: str | dict | None = None,
 	order_by: str = "modified asc",
 	limit_start: int = 0,
 	limit_page_length: int = 100,

@@ -528,9 +528,10 @@ CREATE TABLE IF NOT EXISTS `pos_opening_shifts` (
   `user` VARCHAR(255) DEFAULT NULL,
   `pos_closing_shift` VARCHAR(100) DEFAULT NULL,
   `erp_id` VARCHAR(255) DEFAULT NULL,
-  `sync_status` ENUM('pending','synced','failed') DEFAULT 'pending',
+  `sync_status` ENUM('pending','syncing','synced','failed') DEFAULT 'pending',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `synced_at` DATETIME DEFAULT NULL,
+  UNIQUE INDEX `idx_erp_id` (`erp_id`),
   INDEX `idx_user` (`user`),
   INDEX `idx_status` (`status`),
   INDEX `idx_sync_status` (`sync_status`)
@@ -556,9 +557,10 @@ CREATE TABLE IF NOT EXISTS `pos_closing_entries` (
   `pos_profile` VARCHAR(255) DEFAULT NULL,
   `user` VARCHAR(255) DEFAULT NULL,
   `erp_id` VARCHAR(255) DEFAULT NULL,
-  `sync_status` ENUM('pending','synced','failed') DEFAULT 'pending',
+  `sync_status` ENUM('pending','syncing','synced','failed') DEFAULT 'pending',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `synced_at` DATETIME DEFAULT NULL,
+  UNIQUE INDEX `idx_erp_id` (`erp_id`),
   INDEX `idx_user` (`user`),
   INDEX `idx_pos_opening_entry_id` (`pos_opening_entry_id`),
   INDEX `idx_sync_status` (`sync_status`)
@@ -649,6 +651,7 @@ CREATE TABLE IF NOT EXISTS `expenses` (
   `sync_status` ENUM('pending','synced','failed') DEFAULT 'pending',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `synced_at` DATETIME DEFAULT NULL,
+  UNIQUE INDEX `idx_erp_id` (`erp_id`),
   INDEX `idx_posting_date` (`posting_date`),
   INDEX `idx_sync_status` (`sync_status`),
   INDEX `idx_owner` (`owner`)
@@ -669,6 +672,7 @@ CREATE TABLE IF NOT EXISTS `bank_drops` (
   `sync_status` ENUM('pending','synced','failed') DEFAULT 'pending',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `synced_at` DATETIME DEFAULT NULL,
+  UNIQUE INDEX `idx_erp_id` (`erp_id`),
   INDEX `idx_posting_date` (`posting_date`),
   INDEX `idx_sync_status` (`sync_status`),
   INDEX `idx_owner` (`owner`)
@@ -686,6 +690,7 @@ CREATE TABLE IF NOT EXISTS `stock_adjustments` (
   `sync_status` ENUM('pending','synced','failed') DEFAULT 'pending',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `synced_at` DATETIME DEFAULT NULL,
+  UNIQUE INDEX `idx_erp_id` (`erp_id`),
   INDEX `idx_item_code` (`item_code`),
   INDEX `idx_warehouse` (`warehouse`),
   INDEX `idx_sync_status` (`sync_status`)
@@ -706,6 +711,7 @@ CREATE TABLE IF NOT EXISTS `quotations` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `synced_at` DATETIME DEFAULT NULL,
   UNIQUE INDEX `idx_local_id` (`local_id`),
+  UNIQUE INDEX `idx_erp_id` (`erp_id`),
   INDEX `idx_customer` (`customer`),
   INDEX `idx_sync_status` (`sync_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -733,6 +739,7 @@ CREATE TABLE IF NOT EXISTS `pending_invoices` (
   `grand_total` DECIMAL(18,6) DEFAULT 0,
   `server_name` VARCHAR(255) DEFAULT NULL,
   UNIQUE INDEX `idx_local_id` (`local_id`),
+  UNIQUE INDEX `idx_server_name` (`server_name`),
   INDEX `idx_status` (`status`),
   INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -751,6 +758,7 @@ CREATE TABLE IF NOT EXISTS `pending_purchases` (
   `grand_total` DECIMAL(18,6) DEFAULT 0,
   `server_name` VARCHAR(255) DEFAULT NULL,
   UNIQUE INDEX `idx_local_id` (`local_id`),
+  UNIQUE INDEX `idx_server_name` (`server_name`),
   INDEX `idx_type` (`type`),
   INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

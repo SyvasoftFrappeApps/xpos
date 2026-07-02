@@ -68,8 +68,10 @@ function sanitizeForIdb<T>(value: T): T {
 
 export interface PendingInvoice {
 	id?: number;
+	local_id?: string;
+	server_name?: string;
 	data: unknown;
-	status: "pending" | "syncing" | "failed";
+	status: "pending" | "syncing" | "synced" | "failed";
 	created_at: string;
 	error?: string;
 	retry_count: number;
@@ -105,7 +107,7 @@ export interface PendingPurchase {
 	id?: number;
 	type: "purchase_order" | "purchase_receipt" | "purchase_invoice";
 	data: unknown;
-	status: "pending" | "syncing" | "failed";
+	status: "pending" | "syncing" | "synced" | "failed";
 	created_at: string;
 	error?: string;
 	retry_count: number;

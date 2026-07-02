@@ -210,7 +210,6 @@ export const SYNC_TABLES: SyncTableConfig[] = [
 			"display_items_in_stock",
 			"cash_mode_of_payment",
 			"apply_customer_discount",
-			"allow_print_draft_invoices",
 			"use_offline_mode",
 		],
 		orderBy: "modified",

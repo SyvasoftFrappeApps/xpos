@@ -142,6 +142,7 @@ export async function initDatabase(config?: Partial<DbConfig>): Promise<void> {
 		charset: "utf8mb4",
 		timezone: "+00:00",
 		connectTimeout: 5000,
+		dateStrings: true,
 	});
 
 	const conn = await pool.getConnection();
@@ -182,6 +183,36 @@ async function runSchema(): Promise<void> {
 	log.warn("schema.sql not found, skipping migrations");
 }
 
+async function addUniqueIndexIfMissing(
+	db: Pool,
+	table: string,
+	column: string,
+	indexName: string,
+): Promise<void> {
+	try {
+		const [existing] = await db.execute<RowDataPacket[]>(
+			"SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?",
+			[table, indexName],
+		);
+		if ((existing as RowDataPacket[]).length > 0) return;
+
+		const [dupes] = await db.execute<RowDataPacket[]>(
+			`SELECT \`${column}\` FROM \`${table}\` WHERE \`${column}\` IS NOT NULL GROUP BY \`${column}\` HAVING COUNT(*) > 1`,
+		);
+		if ((dupes as RowDataPacket[]).length > 0) {
+			log.warn(
+				`Migration skipped: ${table}.${column} has duplicate values, resolve manually before adding UNIQUE index`,
+			);
+			return;
+		}
+
+		await db.execute(`ALTER TABLE \`${table}\` ADD UNIQUE INDEX \`${indexName}\` (\`${column}\`)`);
+		log.info(`Migration: added UNIQUE index on ${table}.${column}`);
+	} catch (err) {
+		log.warn(`Migration for ${table}.${column} unique index failed`, err);
+	}
+}
+
 /**
  * Incremental schema migrations that can't be expressed as CREATE TABLE IF NOT EXISTS.
  * Safe to run on every startup (idempotent).
@@ -203,6 +234,46 @@ async function runMigrations(): Promise<void> {
 		}
 	} catch (err) {
 		log.warn("Migration check for items.barcode failed", err);
+	}
+
+	// Add the missing 'syncing' value to sync_status enums (push code sets this
+	// transitional state before calling the API; tables created before this fix
+	// only allowed 'pending'/'synced'/'failed', so every push attempt failed).
+	for (const table of ["pos_opening_shifts", "pos_closing_entries"]) {
+		try {
+			const [cols] = await db.execute<RowDataPacket[]>(
+				"SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'sync_status'",
+				[table],
+			);
+			const columnType = (cols as RowDataPacket[])[0]?.COLUMN_TYPE as string | undefined;
+			if (columnType && !columnType.includes("'syncing'")) {
+				await db.execute(
+					`ALTER TABLE \`${table}\` MODIFY COLUMN \`sync_status\` ENUM('pending','syncing','synced','failed') DEFAULT 'pending'`,
+				);
+				log.info(`Migration: added 'syncing' to ${table}.sync_status enum`);
+			}
+		} catch (err) {
+			log.warn(`Migration for ${table}.sync_status enum failed`, err);
+		}
+	}
+
+	// Once a local document syncs to ERPNext, its erp_id/server_name must be
+	// unique locally too — otherwise two local rows can end up pointing at (or
+	// being mistaken for) the same server document. NULL is exempt so unsynced
+	// rows don't collide with each other.
+	const erpIdUniqueTables = [
+		"pos_opening_shifts",
+		"pos_closing_entries",
+		"expenses",
+		"bank_drops",
+		"stock_adjustments",
+		"quotations",
+	];
+	for (const table of erpIdUniqueTables) {
+		await addUniqueIndexIfMissing(db, table, "erp_id", "idx_erp_id");
+	}
+	for (const table of ["pending_invoices", "pending_purchases"]) {
+		await addUniqueIndexIfMissing(db, table, "server_name", "idx_server_name");
 	}
 
 	try {
@@ -250,6 +321,8 @@ async function runMigrations(): Promise<void> {
 		["close_bill", "TINYINT(1) DEFAULT 1"],
 		["close_shift", "TINYINT(1) DEFAULT 0"],
 		["allow_reprint_invoice", "TINYINT(1) DEFAULT 0"],
+		["print_draft_invoice", "TINYINT(1) DEFAULT 0"],
+		["manage_role_permissions", "TINYINT(1) DEFAULT 0"],
 		["shift_report", "TINYINT(1) DEFAULT 0"],
 		["allow_cancel_invoice", "TINYINT(1) DEFAULT 0"],
 		["unsettled_invoices", "TINYINT(1) DEFAULT 0"],
@@ -392,13 +465,18 @@ export async function upsertBatch(
 	table: string,
 	rows: Record<string, unknown>[],
 	primaryKey: string,
+	preserveOnUpdate: string[] = [],
 ): Promise<number> {
 	if (rows.length === 0) return 0;
 
 	const columns = Object.keys(rows[0]);
 	const placeholders = columns.map(() => "?").join(", ");
+	// Columns in preserveOnUpdate are still written on first INSERT, but an
+	// existing row's value is left untouched on conflict (e.g. password_hash,
+	// which the server always sends empty and must never overwrite a locally
+	// set offline-login password).
 	const updateCols = columns
-		.filter((c) => c !== primaryKey)
+		.filter((c) => c !== primaryKey && !preserveOnUpdate.includes(c))
 		.map((c) => `\`${c}\` = VALUES(\`${c}\`)`)
 		.join(", ");
 

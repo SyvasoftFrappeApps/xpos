@@ -94,6 +94,10 @@ def get_erp_settings():
 		"float_precision": frappe.db.get_default("float_precision") or "",
 	}
 
+	settings["pos_settings"] = {
+		"invoice_type": frappe.db.get_single_value("POS Settings", "invoice_type") or "Sales Invoice",
+	}
+
 	return settings
 
 
