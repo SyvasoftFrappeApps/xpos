@@ -259,29 +259,94 @@ def get_pos_users(
 		user = user_meta.get(pu.user)
 		if not user:
 			continue
-		role_name = pu.pos_role or DEFAULT_ROLE
-		perms = _get_role_permissions(role_name)
 		discount_limit = (
 			flt(pu.discount_limit) if pu.discount_limit not in (None, "") else DEFAULT_DISCOUNT_LIMIT
 		)
-		row = {
-			"name": user.name,
-			"username": user.username or user.name,
-			"full_name": user.full_name or user.name,
-			"enabled": cint(user.enabled),
-			"modified": str(user.modified) if user.modified else None,
-			"password_hash": "",
-			"role": role_name,
-			"pos_profile": pu.pos_profile or "",
-			"warehouse": pu.warehouse or "",
-			"company": pu.company or "",
-			"theme": "Default",
-			"discount_limit": discount_limit,
-			**{key: cint(perms.get(key, False)) for key in ALL_PERMISSION_KEYS},
-		}
-		results.append(row)
+		results.append(
+			_build_pos_user_row(
+				user,
+				pos_profile=pu.pos_profile,
+				pos_role=pu.pos_role,
+				discount_limit=discount_limit,
+				warehouse=pu.warehouse,
+				company=pu.company,
+			)
+		)
 
 	return results
+
+
+def _build_pos_user_row(
+	user_doc,
+	pos_profile: str | None,
+	pos_role: str | None,
+	discount_limit,
+	warehouse: str | None,
+	company: str | None,
+) -> dict:
+	"""Shared per-user row shape used by both the bulk ``get_pos_users`` sync
+	and the single-user ``get_pos_user_profile`` login-time lookup.
+
+	``password_hash`` is always returned empty — the server never transmits
+	password data; the desktop app hashes and stores it locally itself.
+	"""
+	role_name = pos_role or DEFAULT_ROLE
+	perms = _get_role_permissions(role_name)
+	return {
+		"name": user_doc.name,
+		"username": user_doc.username or user_doc.name,
+		"full_name": user_doc.full_name or user_doc.name,
+		"enabled": cint(user_doc.enabled),
+		"modified": str(user_doc.modified) if user_doc.modified else None,
+		"password_hash": "",
+		"role": role_name,
+		"pos_profile": pos_profile or "",
+		"warehouse": warehouse or "",
+		"company": company or "",
+		"theme": "Default",
+		"discount_limit": flt(discount_limit) if discount_limit not in (None, "") else DEFAULT_DISCOUNT_LIMIT,
+		**{key: cint(perms.get(key, False)) for key in ALL_PERMISSION_KEYS},
+	}
+
+
+@frappe.whitelist()
+def get_pos_user_profile(user: str) -> dict | None:
+	"""Single-user version of :func:`get_pos_users`, for use at login time.
+
+	Returns the same row shape as one entry of ``get_pos_users()``, or
+	``None`` if the user doesn't exist or has no ``POS Profile User`` row on
+	an enabled POS Profile. Called by the Hub (with its own admin
+	api_key/api_secret) right after a standard ``/api/method/login`` call
+	succeeds, to confirm POS Profile linkage and fetch the role/permissions/
+	profile data needed for the local desktop ``pos_users`` upsert.
+	"""
+	from xpos.api.utilities import get_active_pos_profile
+
+	if not user or not frappe.db.exists("User", user):
+		return None
+
+	profile = get_active_pos_profile(user)
+	if not profile:
+		return None
+
+	user_docs = frappe.get_all(
+		"User",
+		filters={"name": user},
+		fields=["name", "username", "full_name", "enabled", "modified"],
+		ignore_permissions=True,
+	)
+	if not user_docs:
+		return None
+
+	pos_profile_name = profile.get("name")
+	return _build_pos_user_row(
+		user_docs[0],
+		pos_profile=pos_profile_name,
+		pos_role=_get_user_pos_role(user, pos_profile_name),
+		discount_limit=_get_user_discount_limit(user, pos_profile_name),
+		warehouse=profile.get("warehouse"),
+		company=profile.get("company"),
+	)
 
 
 @frappe.whitelist()

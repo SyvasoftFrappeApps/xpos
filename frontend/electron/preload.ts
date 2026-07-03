@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { HubAuthResult } from "./hub/loginValidator";
 
 const SYNC_DATA_CHANNELS = [
 	"sync-pull-batch",
@@ -420,5 +421,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		pingHub: (): Promise<boolean> => ipcRenderer.invoke("node:ping-hub"),
 		getHubSecret: (): Promise<string | null> => ipcRenderer.invoke("node:get-hub-secret"),
 		triggerTillSync: (): Promise<Record<string, unknown>> => ipcRenderer.invoke("node:trigger-till-sync"),
+		loginOnline: (username: string, password: string): Promise<HubAuthResult> =>
+			ipcRenderer.invoke("node:login-online", { username, password }),
+		loginViaHub: (username: string, password: string): Promise<HubAuthResult> =>
+			ipcRenderer.invoke("node:login-via-hub", { username, password }),
 	},
 });

@@ -47,6 +47,29 @@
 						</div>
 					</div>
 
+					<div v-if="isHubRole" class="space-y-2">
+						<label for="server-url" class="text-sm font-medium text-foreground">
+							Server URL
+						</label>
+						<div class="relative">
+							<Globe
+								class="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+							/>
+							<Input
+								id="server-url"
+								v-model="serverUrl"
+								type="url"
+								placeholder="https://your-erpnext-site.com"
+								class="ps-10"
+								:disabled="authStore.isLoading"
+								autocomplete="url"
+							/>
+						</div>
+						<p class="text-xs text-muted-foreground">
+							Used to validate this login against ERPNext. Leave unchanged if unsure.
+						</p>
+					</div>
+
 					<div class="space-y-2">
 						<label for="password" class="text-sm font-medium text-foreground"> Password </label>
 						<div class="relative">
@@ -97,13 +120,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, inject } from "vue";
+import { ref, computed, onMounted, onUnmounted, inject } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/authStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { User, Lock, Eye, EyeOff, LogIn, Loader2, AlertCircle } from "lucide-vue-next";
+import { User, Lock, Eye, EyeOff, LogIn, Loader2, AlertCircle, Globe } from "lucide-vue-next";
+import { isElectron } from "@/services/electronBridge";
 import LogoDark from "@/assets/images/xpos-logo-dark.svg";
 import LogoLight from "@/assets/images/xpos-logo-light.svg";
 const isDark = inject("isDark")! as boolean;
@@ -114,9 +138,20 @@ const authStore = useAuthStore();
 const username = ref("");
 const password = ref("");
 const showPassword = ref(false);
+const role = ref("");
+const serverUrl = ref("");
+const isHubRole = computed(() => isElectron() && role.value === "hub");
 
 async function handleLogin() {
 	if (!username.value || !password.value) return;
+
+	if (isHubRole.value && serverUrl.value.trim()) {
+		try {
+			await window.electronAPI!.setServerUrl(serverUrl.value.trim());
+		} catch {
+			/* non-fatal — online validation will just fall back to offline */
+		}
+	}
 
 	const success = await authStore.login(username.value, password.value);
 	if (success) {
@@ -125,8 +160,23 @@ async function handleLogin() {
 	}
 }
 
-onMounted(() => {
+onMounted(async () => {
 	authStore.clearError();
+
+	if (isElectron()) {
+		try {
+			role.value = await window.electronAPI!.node.getRole();
+		} catch {
+			role.value = "hub";
+		}
+		if (role.value === "hub") {
+			try {
+				serverUrl.value = await window.electronAPI!.getServerUrl();
+			} catch {
+				/* ignore — field just starts empty */
+			}
+		}
+	}
 });
 
 onUnmounted(() => {

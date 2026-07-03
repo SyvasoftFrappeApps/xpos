@@ -3,6 +3,7 @@ import { query, execute, upsertBatch, getMeta, setMeta } from "../database/dbSer
 import { DEFAULT_HUB_PORT } from "./nodeConfig";
 import crypto from "crypto";
 import { createLogger } from "../logger";
+import { validateOnlineLogin } from "./loginValidator";
 
 const log = createLogger("HubAPI");
 
@@ -96,7 +97,6 @@ const PULL_TABLES: Record<string, { primaryKey: string; modifiedCol?: string }> 
 	customers: { primaryKey: "name", modifiedCol: "modified" },
 	suppliers: { primaryKey: "name", modifiedCol: "modified" },
 	bins: { primaryKey: "name", modifiedCol: "modified" },
-	pos_users: { primaryKey: "name", modifiedCol: "modified" },
 	pos_users: { primaryKey: "name", modifiedCol: "modified" },
 	pos_profile_cache: { primaryKey: "name" },
 	item_tax_cache: { primaryKey: "cache_key" },
@@ -319,6 +319,28 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 			);
 
 			json(res, { success: true, local_id: localId }, 201);
+			return;
+		}
+
+		if (method === "POST" && path === "/api/auth/validate") {
+			const body = JSON.parse(await readBody(req));
+			const username = String(body.username || "");
+			const password = String(body.password || "");
+			if (!username || !password) {
+				json(res, { success: false, reason: "invalid_credentials", error: "Username and password required" });
+				return;
+			}
+
+			const result = await validateOnlineLogin(username, password);
+			if (result.success && result.user) {
+				// Freshen the Hub's own local copy too — cheap, and lets the Hub
+				// machine also offline-login this user with the confirmed hash.
+				await upsertBatch("pos_users", [result.user], "name");
+			}
+			// Always 200: invalid_credentials/no_pos_profile/erpnext_unreachable
+			// are legitimate outcomes, not transport errors. Non-2xx is reserved
+			// for the isAuthorized() gate above and unexpected exceptions below.
+			json(res, result);
 			return;
 		}
 

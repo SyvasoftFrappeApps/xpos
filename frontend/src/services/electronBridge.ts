@@ -72,6 +72,37 @@ export interface ElectronUpdateAPI {
 	onStatus: (callback: (status: Record<string, unknown>) => void) => () => void;
 }
 
+// Mirrors electron/hub/loginValidator.ts's types. Not imported directly:
+// src/ is a separate renderer bundle from electron/ and can't cross-import.
+export interface HubAuthUser {
+	name: string;
+	username: string;
+	full_name: string;
+	role: string;
+	pos_profile: string;
+	warehouse: string;
+	company: string;
+	theme: string;
+	discount_limit: number;
+	enabled: number;
+	[permissionKey: string]: string | number;
+}
+
+export type HubAuthFailureReason =
+	| "invalid_credentials"
+	| "no_pos_profile"
+	| "erpnext_unreachable"
+	| "not_configured"
+	| "wrong_role"
+	| "error";
+
+export interface HubAuthResult {
+	success: boolean;
+	reason?: HubAuthFailureReason;
+	error?: string;
+	user?: HubAuthUser;
+}
+
 export interface ElectronNodeAPI {
 	getRole: () => Promise<string>;
 	setRole: (config: {
@@ -84,6 +115,8 @@ export interface ElectronNodeAPI {
 	pingHub: () => Promise<boolean>;
 	getHubSecret: () => Promise<string | null>;
 	triggerTillSync: () => Promise<Record<string, unknown>>;
+	loginOnline: (username: string, password: string) => Promise<HubAuthResult>;
+	loginViaHub: (username: string, password: string) => Promise<HubAuthResult>;
 }
 
 export interface ElectronDbAPI {

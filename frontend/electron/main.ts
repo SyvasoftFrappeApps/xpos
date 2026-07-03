@@ -9,9 +9,10 @@ import { initRealtimeStock, disconnectRealtime } from "./sync/realtimeStock";
 import { initSyncEngine, stopSyncEngine, updateSyncContext, runSyncCyclePublic } from "./sync/syncEngine";
 import { initAutoUpdater, stopAutoUpdater } from "./autoUpdater";
 import { startHubServer, stopHubServer, getHubApiSecret } from "./hub/hubServer";
-import { initTillClient, runTillSync, pingHub } from "./hub/tillClient";
+import { initTillClient, runTillSync, pingHub, validateLoginViaHub } from "./hub/tillClient";
+import { validateOnlineLogin } from "./hub/loginValidator";
 import { type NodeRole } from "./hub/nodeConfig";
-import { getMeta, setMeta } from "./database/dbService";
+import { getMeta, setMeta, upsertBatch } from "./database/dbService";
 import { createLogger, getLogDir } from "./logger";
 
 const log = createLogger("Main");
@@ -362,6 +363,45 @@ ipcMain.handle("node:trigger-till-sync", async () => {
 		return { success: true, ...result };
 	} catch (err) {
 		return { success: false, error: err instanceof Error ? err.message : String(err) };
+	}
+});
+
+ipcMain.handle("node:login-online", async (_e, args: { username: string; password: string }) => {
+	if (currentRole !== "hub") {
+		return { success: false, reason: "wrong_role", error: "This device is not configured as a Hub" };
+	}
+	try {
+		const result = await validateOnlineLogin(args.username, args.password);
+		if (result.success && result.user) {
+			await upsertBatch("pos_users", [result.user], "name");
+		}
+		return result;
+	} catch (err) {
+		log.error("node:login-online failed", err instanceof Error ? err.message : err);
+		return { success: false, reason: "error", error: err instanceof Error ? err.message : String(err) };
+	}
+});
+
+ipcMain.handle("node:login-via-hub", async (_e, args: { username: string; password: string }) => {
+	if (currentRole !== "till") {
+		return { success: false, reason: "wrong_role", error: "This device is not configured as a Till" };
+	}
+	try {
+		const result = await validateLoginViaHub(args.username, args.password);
+		if (result.success && result.user) {
+			await upsertBatch("pos_users", [result.user], "name");
+		}
+		return result;
+	} catch (err) {
+		// Only thrown for transport-level failures (Till can't reach the Hub at
+		// all, or a bad/missing bearer token) — hubServer.ts's route itself
+		// always resolves 200 for expected credential/profile outcomes.
+		log.warn("node:login-via-hub: hub unreachable", err instanceof Error ? err.message : err);
+		return {
+			success: false,
+			reason: "erpnext_unreachable",
+			error: err instanceof Error ? err.message : "Could not reach the Hub",
+		};
 	}
 });
 

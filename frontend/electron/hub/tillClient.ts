@@ -1,6 +1,7 @@
 import { net } from "electron";
 import { upsertBatch, query, execute, getMeta, setMeta } from "../database/dbService";
 import { createLogger } from "../logger";
+import type { HubAuthResult } from "./loginValidator";
 
 const log = createLogger("TillClient");
 
@@ -106,7 +107,12 @@ async function pullFromHub(): Promise<number> {
 			);
 
 			if (result.data.length > 0) {
-				await upsertBatch(table, result.data, primaryKey);
+				// The server always sends an empty password_hash for pos_users (it
+				// never transmits password data) — without this, the routine pull
+				// cycle would periodically wipe out a password just validated and
+				// stored locally via the online login flow (loginValidator.ts).
+				const preserveOnUpdate = table === "pos_users" ? ["password_hash"] : [];
+				await upsertBatch(table, result.data, primaryKey, preserveOnUpdate);
 				totalPulled += result.data.length;
 			}
 
@@ -380,4 +386,18 @@ export async function pingHub(): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Relay a login attempt to the Hub, which validates it against ERPNext (the
+ * Till never gets its own ERPNext credentials). Throws only on a transport
+ * failure (Hub unreachable, bad bearer token) — the Hub's own endpoint
+ * always resolves 200 for credential/profile outcomes, so those come back
+ * as a normal HubAuthResult, not an exception.
+ */
+export async function validateLoginViaHub(username: string, password: string): Promise<HubAuthResult> {
+	return hubFetch<HubAuthResult>("/api/auth/validate", {
+		method: "POST",
+		body: JSON.stringify({ username, password }),
+	});
 }

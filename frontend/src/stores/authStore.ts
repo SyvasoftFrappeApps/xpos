@@ -1,5 +1,6 @@
 import { call } from "@/services/api";
 import { isElectron } from "@/services/electronBridge";
+import type { HubAuthResult } from "@/services/electronBridge";
 import { loadPermissions, resetPermissions } from "@/services/userRights";
 import { UserSession } from "@/types/pos.types";
 import { defineStore } from "pinia";
@@ -79,12 +80,70 @@ export const useAuthStore = defineStore("auth", () => {
 		return false;
 	}
 
+	async function attemptOnlineLogin(role: string, username: string, password: string): Promise<HubAuthResult> {
+		try {
+			if (role === "till") {
+				return await window.electronAPI!.node.loginViaHub(username, password);
+			}
+			return await window.electronAPI!.node.loginOnline(username, password);
+		} catch (err) {
+			return {
+				success: false,
+				reason: "erpnext_unreachable",
+				error: err instanceof Error ? err.message : "Login request failed",
+			};
+		}
+	}
+
 	async function login(username: string, password: string): Promise<boolean> {
 		try {
 			isLoading.value = true;
 			error.value = "";
 
 			if (isElectron()) {
+				let role = "hub";
+				try {
+					role = await window.electronAPI!.node.getRole();
+				} catch {
+					/* default to hub, matching main.ts's own default when role is unknown */
+				}
+
+				const onlineResult = await attemptOnlineLogin(role, username, password);
+
+				if (onlineResult.success && onlineResult.user) {
+					isAuthenticated.value = true;
+					isOfflineAuth.value = false;
+					user.value = {
+						user: username,
+						user_email: username,
+						user_fullname: onlineResult.user.full_name || username,
+					};
+					if (role === "hub") {
+						window.electronAPI!.startSyncEngine().catch(() => {
+							/* non-fatal — background sync will retry */
+						});
+					}
+					await loadPermissions(username);
+					return true;
+				}
+
+				// Hard stops: the server has just told us definitively that this
+				// credential pair is wrong, or this user isn't a POS user. Do NOT
+				// fall back to a stale local hash here — that would mask a real
+				// password change or deactivation with an old local hash, which
+				// would be a security regression.
+				if (onlineResult.reason === "invalid_credentials") {
+					error.value = "Incorrect username or password.";
+					return false;
+				}
+				if (onlineResult.reason === "no_pos_profile") {
+					error.value = "This user is not linked to an active POS Profile.";
+					return false;
+				}
+
+				// Remaining reasons (erpnext_unreachable / not_configured /
+				// wrong_role / error) are connectivity or configuration problems,
+				// not credential problems — fall back to local offline auth.
 				return await loginOffline(username, password);
 			}
 
